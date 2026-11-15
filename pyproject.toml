@@ -1,0 +1,109 @@
+[project]
+name = "discord-bot-core"
+version = "0.1.0"
+description = "The base every Rubidium Labs Discord bot is built on."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.14"
+authors = [{ name = "Rubidium Labs" }]
+keywords = ["discord", "discord.py", "bot", "library"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: AsyncIO",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.14",
+    "Typing :: Typed",
+]
+dependencies = [
+    "discord.py>=2.7.1,<3",
+    "pydantic-settings>=2.10,<3",
+    "SQLAlchemy[asyncio]>=2.0,<3",
+    "alembic>=1.13,<2",
+]
+
+[project.optional-dependencies]
+sqlite = ["aiosqlite"]
+postgres = ["asyncpg"]
+
+[project.urls]
+Homepage = "https://github.com/rubidium-labs/discord-bot-core"
+Repository = "https://github.com/rubidium-labs/discord-bot-core"
+Changelog = "https://github.com/rubidium-labs/discord-bot-core/blob/main/CHANGELOG.md"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
+    "ruff",
+    "mypy",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/discord_bot_core"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+addopts = "--cov=discord_bot_core --cov-report=term-missing --cov-report=xml"
+
+[tool.coverage.run]
+source = ["discord_bot_core"]
+
+[tool.coverage.report]
+show_missing = true
+
+[tool.ruff]
+target-version = "py314"
+src = ["src", "tests"]
+# Documentation embeds illustrative code snippets; ruff formats only real source.
+extend-exclude = ["docs", "README.md", "CHANGELOG.md", "CONTRIBUTING.md"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+    "D",   # pydocstyle
+    "G",   # flake8-logging-format
+    "ASYNC", # flake8-async
+    "RUF", # ruff-specific rules
+]
+ignore = [
+    "D203", # one blank line before class docstring (conflicts with D211)
+    "D213", # multi-line docstring summary on the second line (conflicts with D212)
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["D"]  # tests do not need docstrings
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+files = ["src"]
+python_version = "3.14"
+strict = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+disallow_any_generics = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+show_error_codes = true
