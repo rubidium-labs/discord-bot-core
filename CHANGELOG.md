@@ -11,6 +11,7 @@ listed under **Changed** or **Removed**.
 
 ### Added
 
+- `logging_config.configure_logging` (single tagged stderr handler, idempotent).
 - Project skeleton: `pyproject.toml` (hatchling, uv, ruff, pytest, coverage, mypy),
   `uv.lock`, CI workflow, `src/` layout with the import-side-effect-free package and
   `py.typed`.
