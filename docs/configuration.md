@@ -21,7 +21,6 @@ is the field name, lower case, in the secrets directory (see below).
 | `log_level` | `DEBUG`, `INFO`, `WARNING`, `ERROR` or `CRITICAL` | no | no | `LOG_LEVEL` | — | `INFO` |
 | `error_log_channel_id` | `PositiveInt \| None` | no | no | `ERROR_LOG_CHANNEL_ID` | — | `None` (feature off) |
 | `database_url` | `SecretStr \| None` | no | **yes** (the URL may embed a password) | `DATABASE_URL` | `database_url` | `None` (the bot runs without a database) |
-| `owner_ids` | `frozenset[int]` | no | no | `OWNER_IDS` (a JSON list, e.g. `[1, 2]`) | — | empty: the owner or team of the Discord application |
 
 Notes:
 
@@ -29,8 +28,8 @@ Notes:
   secret (Docker secrets) creates `discord_token` and `database_url` (if you use a
   database). pydantic-settings would also read a file for another field name, but the
   non-secret settings belong in the environment or the compose file.
-- `environment`: `dev` copies the app's commands to the dev guild on `/admin sync dev`;
-  `prod` publishes global commands only with `/admin sync global`. Nothing is ever synced
+- `environment`: `dev` copies the app's commands to the dev guild on `/core sync dev`;
+  `prod` publishes global commands only with `/core sync global`. Nothing is ever synced
   at start in either case.
 - `log_level`: `DEBUG` makes discord.py's gateway logger verbose and it can print
   payloads. Do not use `DEBUG` in production.
@@ -40,7 +39,6 @@ Notes:
 - `database_url`: a SQLAlchemy async URL (`sqlite+aiosqlite:///...` needs the `sqlite`
   extra, `postgresql+asyncpg://...` the `postgres` extra). Nothing creates tables or runs
   migrations at start.
-- `owner_ids`: only needed to add operators besides the application's owner or team.
 - An app adds its own settings by subclassing `CoreSettings`. A field without a default is
   required, and it fails at start like the two required core fields.
 

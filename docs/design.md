@@ -59,7 +59,7 @@ Contents: 1 Principles · 2 Dependencies · 3 Layout · 4 Dependency injection �
 library adds no new HTTP dependency.
 
 Dev dependency group (`[dependency-groups] dev`, installed by `uv sync`): `pytest`,
-`pytest-asyncio` (mode `auto`), `pytest-cov`, `ruff`.
+`pytest-asyncio` (mode `auto`), `pytest-cov`, `ruff`, `mypy`.
 
 **Version policy.**
 
@@ -77,7 +77,8 @@ Dev dependency group (`[dependency-groups] dev`, installed by `uv sync`): `pytes
 layer are asyncio-only, anyio's backend matrix would test nothing real. Rejected: anyio.
 
 **Type checking.** Type hints everywhere is a rule; a checker is *not* in the brief's CI
-list. The package ships `py.typed`. A `mypy`/`pyright` job is an open question (19).
+list. The package ships `py.typed`, and CI runs mypy alongside ruff and pytest
+(review decision 4, §19); dev group adds `mypy`.
 
 ## 3. Package name and layout
 
@@ -113,8 +114,8 @@ discord-bot-core/
 │   │   ├── transactional.py  # @transactional, get_session()
 │   │   └── admin/
 │   │       ├── __init__.py   # AdminCog (group "admin"), setup helper
-│   │       ├── sync.py       # /admin sync global | dev | guild
-│   │       └── extensions.py # /admin ext load | unload | reload | list
+│   │       ├── sync.py       # /core sync global | dev | guild
+│   │       └── extensions.py # /core ext load | unload | reload | list
 │   ├── errors/
 │   │   ├── __init__.py
 │   │   ├── exceptions.py     # CoreError, UserFacingError, ...
@@ -225,7 +226,6 @@ same name in the secrets directory.
 | `log_level` | `Literal["DEBUG","INFO","WARNING","ERROR","CRITICAL"]` | no, default `INFO` | no |
 | `error_log_channel_id` | `PositiveInt \| None` | no, default `None` (feature off) | no |
 | `database_url` | `SecretStr \| None` | no, default `None` (bot runs without database) | **yes** (may embed a password) |
-| `owner_ids` | `frozenset[int]` | no, default empty = the Discord application's owner/team | no |
 
 Full text and sources: [configuration](configuration.md).
 
@@ -240,9 +240,10 @@ Decisions:
   publish anything by itself.
 - **`database_url` is a `SecretStr`** because URLs carry passwords. The core calls
   `.get_secret_value()` in exactly two places (`Database.__init__`, the alembic helper).
-- **`owner_ids`** exists because discord.py's own `Bot.is_owner` falls back to the
-  application's owner/team when `owner_ids` is empty **[verified: `ext/commands/bot.py`
-  `is_owner`, `owner_ids` option]**; setting it is only needed for extra operators.
+- **Owner check:** discord.py's `Bot.is_owner` falls back to the application's
+  owner/team when no `owner_ids` are given **[verified: `ext/commands/bot.py`
+  `is_owner`, `owner_ids` option]** — the core sets no `owner_ids`, so "owner only" means
+  the application's owner or team.
 - **Sources and priority** (pydantic-settings, **[verified by experiment]**): init
   arguments > environment > `.env` file > secrets directory. So an environment variable
   overrides a secrets file, and a secrets file is the fallback.
@@ -269,7 +270,7 @@ Decisions:
   as noise for one annotation.
 
 **Rejected:** `pydantic.SecretStr` for ids (not secret); one `.env` + `python-dotenv`
-(the brief's flaw); an `owner_id` env var as a plain int (`owner_ids` covers teams).
+(the brief's flaw); an `owner_ids` env var (the application owner/team is the default).
 
 ## 6. Logging
 
@@ -321,14 +322,14 @@ class CoreBot(commands.Bot):
 - Built with `tree_cls=CoreCommandTree`, `command_prefix` unused (`commands.when_mentioned`;
   there are no prefix commands), `intents=discord.Intents.default()` unless given.
   Privileged intents (`members`, `message_content`) are the app's explicit choice; the
-  core needs none.
+  core needs none and defaults to `Intents.default()` (§19 decision 6).
 - **`setup_hook`** (runs once, before the gateway connects **[verified: `Client.login`
   calls `setup_hook` after `static_login`]**): 1. start the database (engine creation is
   lazy, no I/O; log "database configured" or "no database"); 2. `await self.configure()`;
-  3. add the admin cog scoped to the dev guild (section 8); 4. load all discovered
+  3. add the core cog (`/core` group) scoped to the dev guild (section 8); 4. load all discovered
   extensions if `extensions_package` was given (`auto_load` can be turned off);
   a failing extension is logged with traceback and the bot continues (an admin can fix and
-  `/admin ext reload`), unless `strict_extensions=True`.
+  `/core ext reload`), unless `strict_extensions=True`.
 - **No `on_ready` handler in the core.** (`on_ready` fires on every reconnect; Glow synced
   and spoke there.) Nothing is sent to any channel at start.
 - `CoreBot.launch()` is the happy path: configure logging, `self.run(token,
@@ -340,11 +341,11 @@ class CoreBot(commands.Bot):
 **Where commands live.**
 
 - Commands of cogs (global `app_commands`) are registered in the tree as *global*.
-- The core's admin cog is added with `add_cog(cog, guild=Object(dev_guild_id))`
-  **[verified: `Bot.add_cog(..., guild=, guilds=)`]**, so `/admin ...` exists *only in the
-  dev guild*, in dev and in prod alike. The groups are `guild_only` (`/admin` is not
+- The core's cog (group `/core`) is added with `add_cog(cog, guild=Object(dev_guild_id))`
+  **[verified: `Bot.add_cog(..., guild=, guilds=)`]**, so `/core ...` exists *only in the
+  dev guild*, in dev and in prod alike. The groups are `guild_only` (`/core` is not
   available in DMs) and have the `owner_only` check.
-- In **prod** nothing is copied. Global commands are published by `/admin sync global`.
+- In **prod** nothing is copied. Global commands are published by `/core sync global`.
 - In **dev** (`environment == "dev"`), the app's commands are *copied* into the dev guild
   and synced there, so changes show up instantly and nothing leaks to other guilds.
 
@@ -352,17 +353,17 @@ class CoreBot(commands.Bot):
 
 | Command | Behaviour |
 |---|---|
-| `/admin sync global` | `tree.sync()` — publishes the global commands. The admin group is guild-scoped, so it is not part of it. In dev the reply adds "environment is dev; global commands are normally not published here". Allowed, never blocked. |
-| `/admin sync dev` | prod: `tree.sync(guild=dev)` (admin commands only). dev: *reset, copy, sync* (below). |
-| `/admin sync guild <guild_id>` | `tree.sync(guild=Object(id))`: guild-scoped commands of that guild (none by default; for apps that register per-guild commands). Replies with count. A text option `guild_id` (Discord integers overflow in options, so it is a string parsed to `int`; bad input → `UserFacingError`). |
+| `/core sync global` | `tree.sync()` — publishes the global commands. The `/core` group is guild-scoped, so it is not part of it. In dev the reply adds "environment is dev; global commands are normally not published here". Allowed, never blocked. |
+| `/core sync dev` | prod: `tree.sync(guild=dev)` (admin commands only). dev: *reset, copy, sync* (below). |
+| `/core sync guild <guild_id>` | `tree.sync(guild=Object(id))`: guild-scoped commands of that guild (none by default; for apps that register per-guild commands). Replies with count. A text option `guild_id` (Discord integers overflow in options, so it is a string parsed to `int`; bad input → `UserFacingError`). |
 
 **Dev "reset, copy, sync"** (`CoreBot.sync_dev_guild`): `copy_global_to` *overrides* same
 name commands but never removes commands that left the global tree (an unloaded cog),
 **[verified: `tree.py` `copy_global_to` doc "will override pre-existing guild commands"]**,
 so the dev guild would keep stale commands. Therefore: remove every command from
-the dev guild's tree except the admin group object, call
+the dev guild's tree except the `/core` group object, call
 `tree.copy_global_to(guild=dev)`, then `tree.sync(guild=dev)`. It is idempotent and runs on
-every `/admin sync dev`, so it is also correct after `/admin ext reload`. The 100-command
+every `/core sync dev`, so it is also correct after `/core ext reload`. The 100-command
 limit surfaces as `CommandLimitReached` → generic error path.
 
 Each sync reply is an ephemeral embed: scope, number of commands, names (truncated).
@@ -433,16 +434,16 @@ def resolve(self, short_or_full: str) -> str   # "secret_santa" -> full name; un
   core does not override `Bot.load_extension` (Glow did, with a try/except
   `AttributeError` that hid bugs).
 - After load/unload/reload of an extension that defines app commands, the tree is
-  *dirty*; the reply says "run `/admin sync dev`" — it does not sync on its own.
+  *dirty*; the reply says "run `/core sync dev`" — it does not sync on its own.
 
-**Admin extension commands** (`/admin ext ...`, owner only, dev guild):
+**Core extension commands** (`/core ext ...`, owner only, dev guild):
 
 | Command | Option | Autocomplete offers |
 |---|---|---|
-| `/admin ext load` | `name` | unloaded extensions |
-| `/admin ext unload` | `name` | loaded extensions |
-| `/admin ext reload` | `name` | loaded extensions |
-| `/admin ext list` | — | — (embed: loaded ✅ / available ⬜) |
+| `/core ext load` | `name` | unloaded extensions |
+| `/core ext unload` | `name` | loaded extensions |
+| `/core ext reload` | `name` | loaded extensions |
+| `/core ext list` | — | — (embed: loaded ✅ / available ⬜) |
 
 Autocomplete: `app_commands.autocomplete(name=...)` **[verified: `commands.py`
 `autocomplete(**parameters)`]** returning ≤ 25 `Choice`s, filtered by the typed prefix/
@@ -990,7 +991,8 @@ The library's own suite: unit tests per module (`tests/` mirrors `src/`), `tests
 for the database and the real `app_commands.Command` construction, `pytest-asyncio` in
 `auto` mode, coverage reported by `pytest-cov` (`--cov=discord_bot_core
 --cov-report=term-missing --cov-report=xml`, in `addopts`, so `uv run pytest` is the CI
-command). Target `fail_under = 90` for v0.1.0 (a number to raise, not to chase).
+command). No `fail_under`: tests exist to find problems, not to hit a number (review
+decision 7, §19).
 
 ## 16. Documentation plan
 
@@ -1020,14 +1022,14 @@ write it, with its tests and its docs page.
 | # | PR | Content | Tests |
 |---|---|---|---|
 | 1 | `chore: project skeleton` | `pyproject.toml` (hatchling, uv, ruff, pytest, coverage config), `uv.lock`, CI workflow (python 3.14, `uv run pytest`, ruff check + format --check), `py.typed`, package `__init__` | import test: no side effects; ruff and pytest run green in CI |
-| 2 | `feat(settings): CoreSettings` | settings package, `describe()`, `load()` with secrets dir; `docs/configuration.md` is already there (update if drifted) | required fields fail; secrets masked in repr/dump; env > secrets file; file with trailing newline; missing secrets dir no warning; `owner_ids` JSON; unknown env ignored |
+| 2 | `feat(settings): CoreSettings` | settings package, `describe()`, `load()` with secrets dir; `docs/configuration.md` is already there (update if drifted) | required fields fail; secrets masked in repr/dump; env > secrets file; file with trailing newline; missing secrets dir no warning; unknown env ignored |
 | 3 | `feat(logging): configure_logging` | logging_config | idempotent; level applied; no f-string rule in ruff |
 | 4 | `feat(errors): exceptions and ErrorHandler` | errors package, `testing.FakeInteraction` (first version) | table in 10: each exception class → message/ephemeral/log level; unexpected → id in reply and in log record, traceback in `exc_info`, DM (`guild_id=None`); response already done → followup; HTTP failure on reply swallowed; channel report rate limit; channel missing; no exception message in the report |
 | 5 | `feat(bot): CoreBot and CoreCommandTree` | bot package without admin/ext/db yet; `launch()` | bot builds without network; tree `on_error` delegates; startup log has no secret; no `on_ready` registered |
 | 6 | `feat(db): Database, Base, BaseRepository` | database package, `memory_database()` | engine from URL; SQLite pragma; `transaction()` commit/rollback/close and cancellation; naming convention applied |
 | 7 | `feat(commands): transactional` | decorator, `get_session`, checks | the whole table of 12.5 |
 | 8 | `feat(extensions): ExtensionManager` | discovery, manager, `bot` integration | discovery on a fixture package (skips `_x`, sorted); load/unload/reload map errors; cannot load outside package; `load_all` continues after failure |
-| 9 | `feat(admin): sync and extension commands` | admin cog, autocomplete, `sync_dev_guild_once` | owner-only (non-owner gets `OwnerOnlyError`); registered in the dev guild only (`tree.get_commands(guild=dev)`); dev reset/copy removes stale; prod does not copy; autocomplete filters, ≤ 25, empty for non-owner; sync never called at start (spy on `tree.sync`) |
+| 9 | `feat(core-cmds): sync and extension commands` | core cog (`/core`), autocomplete, `sync_dev_guild_once` | owner-only (non-owner gets `OwnerOnlyError`); registered in the dev guild only (`tree.get_commands(guild=dev)`); dev reset/copy removes stale; prod does not copy; autocomplete filters, ≤ 25, empty for non-owner; sync never called at start (spy on `tree.sync`) |
 | 10 | `feat(migrations): alembic helper` | `migrations.py`, doc | `run_migrations` offline/online against a temp SQLite with a sample model; missing URL error |
 | 11 | `feat(ui): embeds, status message, views` | ui package | renderer snapshots; throttle with fake clock; ordering; ephemeral/deferred path; view owner check; timeout clears; `timeout` cap |
 | 12 | `feat(clients): BaseHttpClient` | clients base | injected session; error mapping; no secret in messages |
@@ -1053,33 +1055,25 @@ as a pre-release (`v0.1.0-rc1`... or main via a commit-pinned git dependency).
 | Import-time side effects (engine, settings) | None by design; tested. |
 | `interaction.extras` is public but semi-obscure | The key is a private sentinel; the accessor is the only supported way; documented. |
 
-## 19. Open questions (not resolvable from the brief and the references)
+## 19. Review decisions (Tim, 2026-11-15 — all open questions resolved)
 
-1. **Bootstrap sync as a CLI one-shot** (8). The brief says "sync is a command"; a first
-   sync needs *something* before the admin commands exist. Proposed: a gateway-less
-   one-shot (`sync_dev_guild_once`) invoked by a human. Needs Tim's OK.
-2. **Admin group name `/admin`** may clash with an app's own `/admin`; proposed constructor
-   option `admin_group_name="admin"`. Tim may prefer a fixed unusual name (e.g. `core`).
-3. **`owner_ids` setting** is an addition not in the brief (the brief says "owner only";
-   the Discord application owner/team is the default). Keep or drop?
-4. **Type checker in CI** (mypy/pyright/ty): "type hints everywhere" is in the brief but a
-   checker is not in the CI list. Proposed: add as a non-blocking job in `v0.1.0`, blocking
-   later.
-5. **`environment` default `prod`** — alternative: required. The brief lists no default;
-   the task statement of this design lists it as non-required.
-6. **Intents for the rubidium-bot.** Secret Santa must refuse users not in the guild;
-   `interaction`-resolved mentions carry `Member`s for users in the guild (the participants
-   string is *text*, so mentions are parsed to ids and the check is `guild.get_member`/
-   `fetch_member`), which wants the privileged **members** intent or one `fetch_member`
-   per participant. That decision belongs to the app design, but it affects the base's
-   default intents (`Intents.default()` without `members`).
-7. **Coverage threshold** (`fail_under = 90`) and **lowest-direct floors** are provisional.
-8. **Error-channel content** (location only, no message) is a privacy-first default; Tim
-   may want the exception message in the private channel.
-9. **Dev `sync global`**: allowed with a warning. Alternative: refuse in dev.
-10. **`/run/secrets` as the default secrets dir** matches the platform (`homelab.secrets`)
-    described in the brief; the env var override is `SECRETS_DIR`? — *not* provided
-    (YAGNI); apps can call `load(secrets_dir=...)`.
+1. **Bootstrap sync:** approved — gateway-less one-shot `sync_dev_guild_once` (§8).
+2. **Admin group name:** `/core` (fixed), so `/admin` stays available for apps.
+3. **`owner_ids` setting:** dropped — the application's owner/team is the only owner
+   (§5); discord.py's `is_owner` provides exactly that by default.
+4. **Type checker in CI:** approved — mypy (or pyright) job added alongside ruff and
+   pytest (§2, CONTRIBUTING).
+5. **`environment`:** default `prod`, not required.
+6. **Intents:** the core's default is `Intents.default()` (no privileged intents);
+   per-app intent needs (e.g. `members`) are the app's choice, not the core's.
+7. **Coverage threshold:** none. Coverage is *reported* (term + xml) but there is no
+   `fail_under` — tests exist to find problems, not to hit a number; business logic
+   must be tested, the rest follows.
+8. **Error-channel content:** location only (no exception message) stays the default,
+   and the channel id is a setting (`error_log_channel_id`) — privacy first.
+9. **Dev `sync global`:** allowed, with a warning in the reply (§8).
+10. **Secrets dir:** `/run/secrets` default via `load(secrets_dir=...)`; no
+    `SECRETS_DIR` env var.
 
 ## 20. Traceability: brief requirement → design
 
@@ -1088,11 +1082,11 @@ Brief section "discord-bot-core":
 | Requirement | Satisfied by |
 |---|---|
 | A bot subclassing `CoreBot` with no cogs runs and offers the below | 7 (`setup_hook` loads admin cog, no cog required), step 5 test "bot builds without cogs" |
-| **Dev guild**: configured; admin commands only there | 5 (`dev_guild_id` required), 8 (`add_cog(guild=Object(dev))`, `guild_only`) |
+| **Dev guild**: configured; core commands only there | 5 (`dev_guild_id` required), 8 (`add_cog(guild=Object(dev))`, `guild_only`) |
 | In dev, app commands copied to dev guild and synced there; in prod global | 8 (reset + copy + sync in dev; `sync global` in prod; `environment`) |
 | No automatic global sync at every start; sync is a command | 8 ("Sync is only a command"; no `on_ready`; test spies `tree.sync`), 7 |
-| **Sync commands** (dev guild, owner only): global, dev guild, one guild by id | 8 table: `/admin sync global|dev|guild` + `owner_only` (12.x checks, 3 `commands/checks.py`) |
-| **Extension commands** (dev guild, owner only): load, unload, reload, list, autocomplete | 9 table, autocomplete notes, `owner_only` |
+| **Sync commands** (dev guild, owner only): global, dev guild, one guild by id | 8 table: `/core sync global|dev|guild` + `owner_only` (12.x checks, 3 `commands/checks.py`) |
+| **Extension commands** (dev guild, owner only): load, unload, reload, list, autocomplete | 9 table (`/core ext ...`), autocomplete notes, `owner_only` |
 | Extensions discovered from a package the app names | 9 `discover_extensions(package)`, `CoreBot(extensions_package=...)` |
 | **Settings**: pydantic-settings, validated at start | 5 (`CoreSettings.load()`, stops at start) |
 | No defaults for ids or secrets, no hard-coded ids | 5 (`discord_token`, `dev_guild_id` required; library has no id literals) |
@@ -1145,6 +1139,6 @@ Brief "flaws to not repeat" (library side): `SingletonMeta` → 4; hidden `Bot()
 `load_dotenv`/`os.getenv`, hard-coded ids, committed token → 5; per-call session with
 commit in `finally` → 11/12; `deleted_at is None` → 11 (no soft delete; rule);
 `.join` on a list → 9 (discovery via `pkgutil`); no owner check → 8/9 (`owner_only` on
-every admin command, tested); `on_ready` sync and TTS greeting → 7, 8; bare `except`,
+every core command, tested); `on_ready` sync and TTS greeting → 7, 8; bare `except`,
 `raise e`, f-string logs, `guild.name` on DMs → 6, 10, ruff rules in CONTRIBUTING; embeds in
 services → 1, 14; unpinned deps, no lock, no tests → 2, 15.
