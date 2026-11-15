@@ -21,3 +21,4 @@ listed under **Changed** or **Removed**.
 - Guides: [getting started](docs/getting-started.md),
   [configuration](docs/configuration.md), [testing](docs/testing.md).
 - Repository files: `README.md`, `CONTRIBUTING.md`, `LICENSE` (MIT), `.env.example`.
+- Settings package: `CoreSettings`, `load(secrets_dir=...)`, `describe()`.
