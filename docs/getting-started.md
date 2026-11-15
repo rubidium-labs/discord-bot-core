@@ -91,7 +91,7 @@ class MyBot(CoreBot):
 ```
 
 `extensions_package` names the package where the extensions (cogs) are discovered. With no
-cog the bot already runs and offers `/admin sync ...` and `/admin ext ...` in the dev guild.
+cog the bot already runs and offers `/core sync ...` and `/core ext ...` in the dev guild.
 
 ## 4. A cog with one slash command
 
@@ -184,18 +184,18 @@ uv run python -m my_bot sync-dev     # once, and after adding or changing comman
 uv run python -m my_bot              # start the bot
 ```
 
-The first sync is a one-shot you run on purpose: on a fresh application the `/admin`
+The first sync is a one-shot you run on purpose: on a fresh application the `/core`
 commands do not exist in Discord yet, and they are what registers everything else
 ([design section 8](design.md#8-dev-guild-and-sync)). The bot never syncs by itself at
 start (Discord rate-limits it). After that first run:
 
-- In the dev guild, run `/admin sync dev`: in `dev` the app's commands are copied there
+- In the dev guild, run `/core sync dev`: in `dev` the app's commands are copied there
   and synced, so `/hello` shows up at once.
-- For production (`ENVIRONMENT=prod`), `/admin sync global` publishes the global commands.
-- `/admin ext load|unload|reload|list` manage the cogs without a restart; run
-  `/admin sync dev` afterwards if the commands changed.
+- For production (`ENVIRONMENT=prod`), `/core sync global` publishes the global commands.
+- `/core ext load|unload|reload|list` manage the cogs without a restart; run
+  `/core sync dev` afterwards if the commands changed.
 
-All `/admin` commands are owner-only (the application's owner or team, or `OWNER_IDS`) and
+All `/core` commands are owner-only (the application's owner or team) and
 exist only in the dev guild.
 
 ## 8. Tests

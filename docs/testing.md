@@ -16,8 +16,9 @@ testpaths = ["tests"]
 addopts = "--cov=my_bot --cov-report=term-missing"
 ```
 
-Coverage is reported on every `uv run pytest`; set `fail_under` in
-`[tool.coverage.report]` once you have a baseline (the core uses 90).
+Coverage is reported on every `uv run pytest` (term + xml). There is deliberately no
+`fail_under` threshold: tests exist to find problems, not to hit a number — test the
+business logic thoroughly, the rest follows.
 
 ## Settings: build them by constructor
 

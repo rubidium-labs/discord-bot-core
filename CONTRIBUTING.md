@@ -19,9 +19,10 @@ uv sync                  # creates .venv, installs the library and the dev group
 CI runs the same commands on every PR. Run them before you push:
 
 ```bash
-uv run pytest            # tests; coverage is reported (it is part of the pytest options)
+uv run pytest            # tests; coverage is reported (term + xml), no fail_under threshold
 uv run ruff check        # lint
 uv run ruff format       # format (CI runs `ruff format --check`)
+uv run mypy src          # type check (the package ships py.typed)
 ```
 
 Tests never need Discord or the network: use the fakes in `discord_bot_core.testing`
@@ -30,7 +31,7 @@ with `uv add` / `uv lock` and commit the lock file in the same PR.
 
 ## Code rules
 
-- Type hints everywhere; the package ships `py.typed`.
+- Type hints everywhere; the package ships `py.typed` and CI runs mypy.
 - Docstrings in **Google style** on every public class and function, with an example when
   the use is not obvious. Ruff enforces this with the `D` rules (`convention = "google"`).
 - Log with lazy arguments (`logger.info("x %s", x)`), never f-strings. No bare `except`,
