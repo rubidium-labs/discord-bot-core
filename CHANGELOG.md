@@ -11,6 +11,9 @@ listed under **Changed** or **Removed**.
 
 ### Added
 
+- Project skeleton: `pyproject.toml` (hatchling, uv, ruff, pytest, coverage, mypy),
+  `uv.lock`, CI workflow, `src/` layout with the import-side-effect-free package and
+  `py.typed`.
 - Design document ([`docs/design.md`](docs/design.md)): package layout, dependency
   injection, settings, logging, the bot, dev guild and sync, extensions, error handling,
   database infrastructure, the transactional session per command, clients, UI kit,
