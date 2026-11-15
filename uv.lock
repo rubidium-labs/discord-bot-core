@@ -423,6 +423,7 @@ sqlite = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "aiosqlite" },
     { name = "mypy" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -443,6 +444,7 @@ provides-extras = ["sqlite", "postgres"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "aiosqlite", specifier = ">=0.22.1" },
     { name = "mypy" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
