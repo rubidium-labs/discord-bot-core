@@ -1,6 +1,8 @@
-# Copy of rubidium-labs/workflows templates/project.yml, adapted for this library.
-# Pull requests: CI. Push to main (a merged PR): CI, then the dev deploy.
-# Release tag v1.2.3 (signed by Tim): CI, then the prod deploy.
+# CI-only workflow for this library: a library has no compose.dev.yml /
+# compose.prod.yml, so there is nothing to deploy in dev or prod.
+# Pull requests and pushes to main: CI (tests, ruff, mypy).
+# Release tags (v*, signed by Tim) trigger nothing here; apps pin the tag as a
+# git dependency instead.
 # The reusable ci.yml takes a single command, so the extra checks (ruff, mypy) are
 # explicit steps here, after the reusable job.
 name: main
@@ -8,7 +10,6 @@ on:
   pull_request:
   push:
     branches: [main]
-    tags: ["v*"]
 
 permissions:
   contents: read
@@ -32,13 +33,3 @@ jobs:
       - run: uv run ruff check
       - run: uv run ruff format --check
       - run: uv run mypy src
-
-  deploy-dev:
-    needs: ci
-    if: github.ref == 'refs/heads/main'
-    uses: rubidium-labs/workflows/.github/workflows/deploy-dev.yml@main
-
-  deploy-prod:
-    needs: ci
-    if: startsWith(github.ref, 'refs/tags/v')
-    uses: rubidium-labs/workflows/.github/workflows/deploy-prod.yml@main
