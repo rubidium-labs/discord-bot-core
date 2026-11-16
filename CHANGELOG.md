@@ -11,6 +11,21 @@ listed under **Changed** or **Removed**.
 
 ### Added
 
+- Guides: [error handling](docs/error-handling.md) and
+  [releasing](docs/releasing.md); README links every docs page.
+- Real-database transactional tests (`tests/commands/test_transactional_real_db.py`):
+  the §12.5 contract against `testing.memory_database()` with commit/rollback/close
+  asserted on rows a second session sees.
+
+### Changed
+
+- The placeholder Protocols in `bot`, `errors` and `extensions` are replaced by the
+  real `Database`/`CoreSettings` types; `CoreBot.database` is `Database | None`.
+- `@transactional` reuses the command's session on a nested decorated call instead of
+  opening a second transaction (design §12: one session per command invocation).
+
+### Added
+
 - Core commands: the owner-only, guild-only `/core` group (`/core sync global|dev|guild`,
   `/core ext load|unload|reload|list` with autocomplete), added to the dev guild only;
   `CoreBot.setup_hook` adds it and loads the extensions; `sync_dev_guild` resets the dev

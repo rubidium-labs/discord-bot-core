@@ -10,47 +10,20 @@ an owner cannot load an arbitrary importable module through the command.
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any, Protocol
+from typing import TYPE_CHECKING
 
 from discord.ext import commands
 
 from discord_bot_core.errors import UserFacingError
 from discord_bot_core.extensions.discovery import discover_extensions
 
+if TYPE_CHECKING:
+    from discord_bot_core.bot.core_bot import CoreBot
+
 __all__ = ["ExtensionManager", "LoadReport"]
 
 logger = logging.getLogger(__name__)
-
-
-class ExtensionBot(Protocol):
-    """The part of a bot the manager needs.
-
-    ``CoreBot`` satisfies this protocol; so does the test stub.
-    """
-
-    @property
-    def extensions(self) -> Mapping[str, Any]:
-        """The loaded extensions, keyed by fully-qualified name."""
-        ...
-
-    @property
-    def tree(self) -> Any:
-        """The command tree; touched by load/unload/reload, never synced here."""
-        ...
-
-    async def load_extension(self, name: str, *, package: str | None = None) -> None:
-        """Load ``name``; raises an ``ExtensionError`` on failure."""
-        ...
-
-    async def unload_extension(self, name: str, *, package: str | None = None) -> None:
-        """Unload ``name``; raises an ``ExtensionError`` on failure."""
-        ...
-
-    async def reload_extension(self, name: str, *, package: str | None = None) -> None:
-        """Reload ``name``; raises an ``ExtensionError`` on failure."""
-        ...
 
 
 @dataclass
@@ -74,11 +47,12 @@ class ExtensionManager:
         >>> await manager.load("secret_santa")  # doctest: +SKIP
     """
 
-    def __init__(self, bot: ExtensionBot, package: str) -> None:
+    def __init__(self, bot: CoreBot, package: str) -> None:
         """Create the manager.
 
         Args:
-            bot: The bot; anything with the discord.py extension API.
+            bot: The bot; any object with the discord.py extension API (in
+                production, :class:`~discord_bot_core.bot.core_bot.CoreBot`).
             package: The package that holds the extensions.
         """
         self._bot = bot

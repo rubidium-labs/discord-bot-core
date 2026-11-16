@@ -58,18 +58,6 @@ the imperative, e.g. `feat(settings): add CoreSettings`, `fix(db): rollback on c
 
 ## Releases
 
-Versions follow [SemVer](https://semver.org/). While `0.x`, a minor release may break the
-public API (what `discord_bot_core.__all__` and the documented modules expose); say so in
-the changelog.
-
-The maintainer releases:
-
-1. In a release PR, move the `Unreleased` entries of `CHANGELOG.md` under a new
-   `## [X.Y.Z] - YYYY-MM-DD` heading and update the compare links at the bottom.
-2. Merge it. Check CI is green on `main`.
-3. Create an **annotated** tag on the merge commit and push it:
-   `git tag -a vX.Y.Z -m "vX.Y.Z" && git push origin vX.Y.Z`.
-4. Apps depend on the tag (git dependency, see
-   [getting started](docs/getting-started.md)) and bump it in their own PR.
-
-Never move or delete a published tag; release a new patch instead.
+The full procedure lives in [docs/releasing.md](docs/releasing.md): release PR moving
+the `Unreleased` changelog entries, then an annotated signed tag pushed by the
+maintainer — never move or delete a published tag.

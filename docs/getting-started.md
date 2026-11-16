@@ -79,7 +79,7 @@ class AppSettings(CoreSettings):
 
 ```python
 # src/my_bot/bot.py
-from discord_bot_core import CoreBot
+from discord_bot_core.bot import CoreBot
 from my_bot.settings import AppSettings
 
 

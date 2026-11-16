@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Awaitable, Callable
-from typing import Any, Protocol
+from typing import Any
 
 import discord
 from discord import app_commands
@@ -14,6 +14,7 @@ from discord_bot_core.bot.tree import CoreCommandTree
 from discord_bot_core.commands.admin import CoreCog
 from discord_bot_core.errors import ErrorHandler
 from discord_bot_core.extensions import ExtensionManager
+from discord_bot_core.infrastructure.database import Database
 from discord_bot_core.logging_config import configure_logging
 from discord_bot_core.settings import CoreSettings, Environment
 
@@ -21,18 +22,6 @@ logger = logging.getLogger(__name__)
 
 _CORE_GROUP_NAME = "core"
 """The name of the core cog's group, kept in the dev guild during a reset."""
-
-
-class Database(Protocol):
-    """The part of the database the bot uses: disposing it on close.
-
-    The concrete :class:`discord_bot_core.infrastructure.database.Database` is
-    added by a later step; this protocol keeps the bot independent of it.
-    """
-
-    async def dispose(self) -> None:
-        """Release the engine's connections."""
-        ...
 
 
 class CoreBot(commands.Bot):
