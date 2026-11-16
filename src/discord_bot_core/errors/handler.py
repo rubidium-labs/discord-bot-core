@@ -12,12 +12,13 @@ import secrets
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any
 
 import discord
 from discord import app_commands
 
 from discord_bot_core.errors.exceptions import OwnerOnlyError, UserFacingError
+from discord_bot_core.settings import CoreSettings
 
 logger = logging.getLogger(__name__)
 
@@ -27,16 +28,6 @@ CHECK_FAILURE_MESSAGE = "You can't use this command."
 NO_PRIVATE_MESSAGE = "This command only works in a server."
 
 _REPORT_WINDOW_SECONDS = 60.0
-
-
-class ErrorSettings(Protocol):
-    """The settings the handler needs.
-
-    ``CoreBot`` will pass the full ``CoreSettings`` later; this protocol keeps the
-    handler independent of the settings package.
-    """
-
-    error_log_channel_id: int | None
 
 
 @dataclass(frozen=True)
@@ -91,15 +82,15 @@ class ErrorHandler:
 
     def __init__(
         self,
-        settings: ErrorSettings,
+        settings: CoreSettings,
         *,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         """Create the handler.
 
         Args:
-            settings: Anything with ``error_log_channel_id``; the report channel is
-                used only when it is set.
+            settings: The bot's settings; only ``error_log_channel_id`` is read, and
+                the report channel is used only when it is set.
             clock: Monotonic clock used for the report rate limit; injectable for
                 tests.
         """

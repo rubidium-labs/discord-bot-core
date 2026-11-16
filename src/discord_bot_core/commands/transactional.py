@@ -91,6 +91,10 @@ def transactional[**P, R](func: Callable[P, Awaitable[R]]) -> Callable[P, Awaita
                 "set database_url."
             )
         async with database.transaction() as session:
+            if SESSION_KEY in interaction.extras:
+                # Nested @transactional call inside one command: reuse the
+                # command's session (design §12: one session per command).
+                return await func(*args, **kwargs)
             interaction.extras[SESSION_KEY] = session
             try:
                 return await func(*args, **kwargs)

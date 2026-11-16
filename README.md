@@ -18,9 +18,9 @@ own**. A bot that subclasses `CoreBot` and has no cog already starts and offers:
 
 No singletons: everything is passed explicitly. Licence: [MIT](LICENSE).
 
-> **Status:** design phase. The architecture is decided in [docs/design.md](docs/design.md)
-> and the code lands in small PRs; the API below is the designed one. Target release:
-> `v0.1.0`.
+> **Status:** implemented, pre-release. The architecture is in
+> [docs/design.md](docs/design.md); all 13 implementation steps are merged on `main`.
+> The first tagged release is `v0.1.0` (tag pushed by the maintainer).
 
 ## Quick start
 
@@ -43,7 +43,7 @@ class AppSettings(CoreSettings):
     """Add your own settings here; a field without a default is required."""
 
 # my_bot/__main__.py
-from discord_bot_core import CoreBot
+from discord_bot_core.bot import CoreBot
 from my_bot.settings import AppSettings
 
 class MyBot(CoreBot):
@@ -89,7 +89,9 @@ Testing a bot built on the core: [docs/testing.md](docs/testing.md).
 - [Configuration](docs/configuration.md): every setting
 - [Dev guild and sync](docs/dev-guild-and-sync.md): where commands live, `/core sync`
 - [Extensions](docs/extensions.md): discovery, `/core ext`, autocomplete
+- [Database and sessions](docs/database.md): engine, Alembic, per-command transaction
+- [Error handling](docs/error-handling.md): exception table, replies, error-log channel
+- [UI kit](docs/ui-kit.md): embeds, status messages, views and modals
 - [Testing](docs/testing.md): tests without Discord
-- Coming with the implementation PRs: database and
-  session, error handling, UI kit, releasing (page map: design section 16)
+- [Releasing](docs/releasing.md): how versions and tags are made
 - [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)

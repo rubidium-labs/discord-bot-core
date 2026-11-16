@@ -8,7 +8,9 @@ import pytest
 from discord.ext import commands
 
 from discord_bot_core.bot import CoreBot, CoreCommandTree
+from discord_bot_core.errors import ErrorHandler
 from discord_bot_core.settings import CoreSettings
+from discord_bot_core.testing import memory_database
 
 TOKEN = "super-secret-token"
 
@@ -135,3 +137,15 @@ def test_launch_configures_logging_and_passes_log_handler_none(
     assert calls["token"] == TOKEN
     assert calls["kwargs"] == {"log_handler": None}
     assert logging.getLogger().level == logging.WARNING
+
+
+async def test_wiring_uses_real_database_and_settings() -> None:
+    settings = _settings()
+    async with memory_database() as database:
+        bot = CoreBot(settings, database=database)
+        try:
+            assert bot.database is database
+            assert bot.settings is settings
+            assert isinstance(bot.error_handler, ErrorHandler)
+        finally:
+            await bot.close()
