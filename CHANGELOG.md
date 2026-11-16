@@ -11,6 +11,8 @@ listed under **Changed** or **Removed**.
 
 ### Added
 
+- Commands package: `@transactional` decorator + `get_session(interaction)` per-command
+  session, `owner_only` check.
 - `logging_config.configure_logging` (single tagged stderr handler, idempotent).
 - Errors package (`CoreError` hierarchy, `ErrorHandler`) and `testing.FakeInteraction`.
 - Database package: `Database` (transaction commit/rollback/close, SQLite pragmas,
