@@ -9,6 +9,12 @@ listed under **Changed** or **Removed**.
 
 ## [Unreleased]
 
+### Changed
+
+- CI only: `.github/workflows/main.yml` no longer has `deploy-dev`/`deploy-prod` jobs
+  and no longer triggers on `v*` tags — a library has no compose file, so there is
+  nothing to deploy. `docs/releasing.md` updated accordingly.
+
 ### Added
 
 - Guides: [error handling](docs/error-handling.md) and
