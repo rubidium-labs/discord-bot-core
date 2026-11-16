@@ -17,6 +17,12 @@ listed under **Changed** or **Removed**.
   guild while keeping `/core`; `ExtensionManager` wired into `CoreBot`.
 - Guides: [dev guild and sync](docs/dev-guild-and-sync.md),
   [extensions](docs/extensions.md).
+- UI kit (`discord_bot_core.ui`): `EmbedTheme`/`DEFAULT_THEME`, `EmbedField`,
+  `info_embed`/`success_embed`/`warning_embed`/`error_embed` and `truncate` (Discord
+  limits enforced); `StatusMessage`/`StatusProgress`/`StatusRenderer` with throttled,
+  serialised edits and `InteractionEditor` (ephemeral, deferred-aware); `BaseView`,
+  `SingleUserView` and `BaseModal` delegating errors to the error handler; guide
+  [`docs/ui-kit.md`](docs/ui-kit.md).
 - Commands package: `@transactional` decorator + `get_session(interaction)` per-command
   session, `owner_only` check.
 - `logging_config.configure_logging` (single tagged stderr handler, idempotent).
