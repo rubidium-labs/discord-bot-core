@@ -11,9 +11,12 @@ from discord_bot_core.settings import CoreSettings
 DEV_GUILD_ID = 1
 
 
-def _settings() -> CoreSettings:
+def _settings(environment: str = "dev") -> CoreSettings:
     return CoreSettings(
-        discord_token="token", dev_guild_id=DEV_GUILD_ID, _env_file=None
+        discord_token="token",
+        dev_guild_id=DEV_GUILD_ID,
+        environment=environment,
+        _env_file=None,
     )
 
 
@@ -28,17 +31,17 @@ class SyncSpyTree(CoreCommandTree):
         self.synced.append(None if guild is None else guild.id)
         return []
 
-    def clear_commands(self, *, guild: Any = None, type: Any = None) -> None:
-        self.calls.append("clear")
-        super().clear_commands(guild=guild, type=type)
+    def remove_command(self, command: str, /, **kwargs: Any) -> Any:
+        self.calls.append("remove")
+        return super().remove_command(command, **kwargs)
 
     def copy_global_to(self, *, guild: Any) -> None:
         self.calls.append("copy")
         super().copy_global_to(guild=guild)
 
 
-def _bot_with_spy() -> tuple[CoreBot, SyncSpyTree]:
-    bot = CoreBot(_settings())
+def _bot_with_spy(environment: str = "dev") -> tuple[CoreBot, SyncSpyTree]:
+    bot = CoreBot(_settings(environment))
     bot._connection._command_tree = None
     tree = SyncSpyTree(bot)
     bot._connection._command_tree = tree
@@ -46,10 +49,31 @@ def _bot_with_spy() -> tuple[CoreBot, SyncSpyTree]:
     return bot, tree
 
 
+async def test_sync_dev_guild_keeps_core_and_removes_stale() -> None:
+    bot, tree = _bot_with_spy()
+
+    @app_commands.command(name="stale")
+    async def stale(interaction: discord.Interaction) -> None:
+        pass
+
+    @app_commands.command(name="core")
+    async def core(interaction: discord.Interaction) -> None:
+        pass
+
+    dev = discord.Object(id=DEV_GUILD_ID)
+    tree.add_command(stale, guild=dev)
+    tree.add_command(core, guild=dev)
+
+    await bot.sync_dev_guild()
+    names = {command.name for command in tree.get_commands(guild=dev)}
+    assert names == {"core"}
+    assert "remove" in tree.calls
+
+
 async def test_sync_dev_guild_reset_copy_sync_order() -> None:
     bot, tree = _bot_with_spy()
     await bot.sync_dev_guild()
-    assert tree.calls == ["clear", "copy", "sync"]
+    assert tree.calls == ["copy", "sync"]
     assert tree.synced == [DEV_GUILD_ID]
 
 
@@ -87,6 +111,45 @@ async def test_sync_dev_guild_is_idempotent() -> None:
     assert names == {"fresh"}
 
 
+async def test_sync_dev_guild_keeps_real_core_group() -> None:
+    from discord_bot_core.commands.admin import CoreCog
+
+    bot, tree = _bot_with_spy()
+    await bot.add_cog(CoreCog(bot), guild=discord.Object(id=DEV_GUILD_ID))
+
+    @app_commands.command(name="stale")
+    async def stale(interaction: discord.Interaction) -> None:
+        pass
+
+    @app_commands.command(name="fresh")
+    async def fresh(interaction: discord.Interaction) -> None:
+        pass
+
+    tree.add_command(stale, guild=discord.Object(id=DEV_GUILD_ID))
+    tree.add_command(fresh)
+
+    await bot.sync_dev_guild()
+    names = {
+        command.name
+        for command in tree.get_commands(guild=discord.Object(id=DEV_GUILD_ID))
+    }
+    assert names == {"core", "fresh"}
+
+
+async def test_sync_dev_guild_prod_does_not_copy() -> None:
+    bot, tree = _bot_with_spy(environment="prod")
+
+    @app_commands.command(name="fresh")
+    async def fresh(interaction: discord.Interaction) -> None:
+        pass
+
+    tree.add_command(fresh)
+    await bot.sync_dev_guild()
+    assert "copy" not in tree.calls
+    assert tree.calls == ["sync"]
+    assert tree.synced == [DEV_GUILD_ID]
+
+
 async def test_sync_global_syncs_without_guild() -> None:
     bot, tree = _bot_with_spy()
     await bot.sync_global()
@@ -102,5 +165,5 @@ async def test_sync_guild_targets_given_guild() -> None:
 async def test_sync_dev_guild_once_syncs_dev_guild() -> None:
     bot, tree = _bot_with_spy()
     await bot.sync_dev_guild_once()
-    assert tree.calls == ["clear", "copy", "sync"]
+    assert tree.calls == ["copy", "sync"]
     assert tree.synced == [DEV_GUILD_ID]

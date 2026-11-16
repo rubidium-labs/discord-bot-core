@@ -143,7 +143,7 @@ async def sync_dev() -> None:
     bot = MyBot(settings)
     async with bot:
         await bot.login(settings.discord_token.get_secret_value())  # runs setup_hook, no websocket
-        commands = await bot.sync_dev_guild()
+        commands = await bot.sync_dev_guild_once()
     print(f"Synced {len(commands)} commands to the dev guild.")
 
 

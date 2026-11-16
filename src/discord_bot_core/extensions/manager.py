@@ -10,6 +10,7 @@ an owner cannot load an arbitrary importable module through the command.
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -29,21 +30,25 @@ class ExtensionBot(Protocol):
     ``CoreBot`` satisfies this protocol; so does the test stub.
     """
 
-    extensions: dict[str, Any]
-    """The loaded extensions, keyed by fully-qualified name."""
+    @property
+    def extensions(self) -> Mapping[str, Any]:
+        """The loaded extensions, keyed by fully-qualified name."""
+        ...
 
-    tree: Any
-    """The command tree; touched by load/unload/reload, never synced here."""
+    @property
+    def tree(self) -> Any:
+        """The command tree; touched by load/unload/reload, never synced here."""
+        ...
 
-    async def load_extension(self, name: str, **kwargs: Any) -> None:
+    async def load_extension(self, name: str, *, package: str | None = None) -> None:
         """Load ``name``; raises an ``ExtensionError`` on failure."""
         ...
 
-    async def unload_extension(self, name: str, **kwargs: Any) -> None:
+    async def unload_extension(self, name: str, *, package: str | None = None) -> None:
         """Unload ``name``; raises an ``ExtensionError`` on failure."""
         ...
 
-    async def reload_extension(self, name: str, **kwargs: Any) -> None:
+    async def reload_extension(self, name: str, *, package: str | None = None) -> None:
         """Reload ``name``; raises an ``ExtensionError`` on failure."""
         ...
 

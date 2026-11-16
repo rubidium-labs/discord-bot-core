@@ -11,6 +11,12 @@ listed under **Changed** or **Removed**.
 
 ### Added
 
+- Core commands: the owner-only, guild-only `/core` group (`/core sync global|dev|guild`,
+  `/core ext load|unload|reload|list` with autocomplete), added to the dev guild only;
+  `CoreBot.setup_hook` adds it and loads the extensions; `sync_dev_guild` resets the dev
+  guild while keeping `/core`; `ExtensionManager` wired into `CoreBot`.
+- Guides: [dev guild and sync](docs/dev-guild-and-sync.md),
+  [extensions](docs/extensions.md).
 - Commands package: `@transactional` decorator + `get_session(interaction)` per-command
   session, `owner_only` check.
 - `logging_config.configure_logging` (single tagged stderr handler, idempotent).

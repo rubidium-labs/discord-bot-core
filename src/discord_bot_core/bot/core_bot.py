@@ -11,11 +11,16 @@ from discord import app_commands
 from discord.ext import commands
 
 from discord_bot_core.bot.tree import CoreCommandTree
+from discord_bot_core.commands.admin import CoreCog
 from discord_bot_core.errors import ErrorHandler
+from discord_bot_core.extensions import ExtensionManager
 from discord_bot_core.logging_config import configure_logging
-from discord_bot_core.settings import CoreSettings
+from discord_bot_core.settings import CoreSettings, Environment
 
 logger = logging.getLogger(__name__)
+
+_CORE_GROUP_NAME = "core"
+"""The name of the core cog's group, kept in the dev guild during a reset."""
 
 
 class Database(Protocol):
@@ -35,8 +40,8 @@ class CoreBot(commands.Bot):
 
     It wires the settings, the error handler and (optionally) the database, and
     offers logging configuration, cleanup hooks and the command sync helpers. It
-    registers no ``on_ready`` handler and adds no command of its own; the core cog
-    and the extensions are added by later steps.
+    registers no ``on_ready`` handler; the core cog (``/core``) and the extensions
+    are added by :meth:`setup_hook`.
 
     Example:
         >>> settings = CoreSettings(discord_token="x", dev_guild_id=1)  # doctest: +SKIP
@@ -59,8 +64,9 @@ class CoreBot(commands.Bot):
         Args:
             settings: The validated settings; the token is read only by
                 :meth:`launch`.
-            extensions_package: The package the extensions are discovered in,
-                stored for the extensions manager (a later step).
+            extensions_package: The package the extensions are discovered in;
+                when given, an :class:`~discord_bot_core.extensions.ExtensionManager`
+                is built for it and :meth:`setup_hook` loads the extensions.
             database: The database, or ``None``; disposed by :meth:`close`.
             error_handler: The error handler; defaults to one built from
                 ``settings``.
@@ -79,7 +85,11 @@ class CoreBot(commands.Bot):
         self.database: Database | None = database
         self.error_handler = error_handler or ErrorHandler(settings)
         self.extensions_package = extensions_package
-        self.extension_manager: Any = None
+        self.extension_manager: ExtensionManager | None = (
+            ExtensionManager(self, extensions_package)
+            if extensions_package is not None
+            else None
+        )
         self._cleanups: list[Callable[[], Awaitable[None]]] = []
 
     @property
@@ -92,15 +102,24 @@ class CoreBot(commands.Bot):
     async def setup_hook(self) -> None:
         """Prepare the bot before the gateway connects.
 
-        Logs whether a database is configured (never its URL) and calls
-        :meth:`configure`. The core cog and the extensions are added by later
-        steps.
+        Logs whether a database is configured (never its URL), calls
+        :meth:`configure`, adds the core cog scoped to the dev guild (so ``/core``
+        exists only there) and, when ``extensions_package`` was given, loads the
+        extensions. A failing extension is logged with its traceback and the bot
+        continues; nothing is synced here.
         """
         if self.database is None:
             logger.info("No database configured")
         else:
             logger.info("Database configured")
         await self.configure()
+        await self.add_cog(
+            CoreCog(self), guild=discord.Object(id=self.settings.dev_guild_id)
+        )
+        if self.extension_manager is not None:
+            report = await self.extension_manager.load_all()
+            for name, message in report.failed.items():
+                logger.warning("Extension %s failed to load: %s", name, message)
 
     async def configure(self) -> None:
         """Application override point, called once from :meth:`setup_hook`.
@@ -136,18 +155,25 @@ class CoreBot(commands.Bot):
         return await self.tree.sync(guild=discord.Object(id=guild_id))
 
     async def sync_dev_guild(self) -> list[app_commands.AppCommand]:
-        """Reset, copy and sync the dev guild's commands.
+        """Sync the dev guild's commands.
 
-        Removes every guild-scoped command from the dev guild (``copy_global_to``
-        never removes stale ones), copies the global commands over and syncs.
-        Idempotent, so it is safe to run on every ``/core sync dev``.
+        In dev: reset, copy and sync. Removes every guild-scoped command from the
+        dev guild except the ``/core`` group (``copy_global_to`` never removes
+        stale ones), copies the global commands over and syncs. Idempotent, so it
+        is safe to run on every ``/core sync dev``.
+
+        In prod: syncs the dev guild only (its admin commands), without copying the
+        global commands.
 
         Returns:
             The commands Discord reports as synced.
         """
         dev = discord.Object(id=self.settings.dev_guild_id)
-        self.tree.clear_commands(guild=dev)
-        self.tree.copy_global_to(guild=dev)
+        if self.settings.environment is Environment.DEV:
+            for command in self.tree.get_commands(guild=dev):
+                if command.name != _CORE_GROUP_NAME:
+                    self.tree.remove_command(command.name, guild=dev)
+            self.tree.copy_global_to(guild=dev)
         return await self.tree.sync(guild=dev)
 
     async def sync_dev_guild_once(self) -> list[app_commands.AppCommand]:
