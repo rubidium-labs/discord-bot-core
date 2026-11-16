@@ -44,7 +44,21 @@ class NoActiveSessionError(CoreError):
 
 
 class ExternalServiceError(CoreError):
-    """An external service (HTTP API, third party) failed."""
+    """An external service (HTTP API, third party) failed.
+
+    Attributes:
+        status: The HTTP status code, when the failure was an HTTP response.
+    """
+
+    def __init__(self, message: str = "", *, status: int | None = None) -> None:
+        """Create the error.
+
+        Args:
+            message: A sanitised description (no query string, no headers).
+            status: The HTTP status code, when known.
+        """
+        super().__init__(message)
+        self.status = status
 
 
 class OwnerOnlyError(app_commands.CheckFailure):

@@ -26,6 +26,8 @@ listed under **Changed** or **Removed**.
   `testing.memory_database()`.
 - Alembic helper `run_migrations` (offline/online, SQLite batch mode, URL from settings,
   never in `alembic.ini`) and the [database guide](docs/database.md).
+- Clients package: `BaseHttpClient` (lazy or injected `aiohttp.ClientSession`,
+  `request_json` raising a sanitised `ExternalServiceError`, `aclose`).
 - Project skeleton: `pyproject.toml` (hatchling, uv, ruff, pytest, coverage, mypy),
   `uv.lock`, CI workflow, `src/` layout with the import-side-effect-free package and
   `py.typed`.

@@ -407,6 +407,7 @@ name = "discord-bot-core"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "aiohttp" },
     { name = "alembic" },
     { name = "discord-py" },
     { name = "pydantic-settings" },
@@ -433,6 +434,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aiohttp", specifier = ">=3.14.5" },
     { name = "aiosqlite", marker = "extra == 'sqlite'" },
     { name = "alembic", specifier = ">=1.13,<2" },
     { name = "asyncpg", marker = "extra == 'postgres'" },
