@@ -13,6 +13,9 @@ listed under **Changed** or **Removed**.
 
 - `logging_config.configure_logging` (single tagged stderr handler, idempotent).
 - Errors package (`CoreError` hierarchy, `ErrorHandler`) and `testing.FakeInteraction`.
+- Database package: `Database` (transaction commit/rollback/close, SQLite pragmas,
+  `StaticPool` for `:memory:`), `Base` with naming convention, `BaseRepository`,
+  `testing.memory_database()`.
 - Project skeleton: `pyproject.toml` (hatchling, uv, ruff, pytest, coverage, mypy),
   `uv.lock`, CI workflow, `src/` layout with the import-side-effect-free package and
   `py.typed`.

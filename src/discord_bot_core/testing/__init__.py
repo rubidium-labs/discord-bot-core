@@ -6,8 +6,12 @@ use whatever runner they like.
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Any
+
+from discord_bot_core.infrastructure.database import Database
 
 
 @dataclass
@@ -162,3 +166,20 @@ class FakeInteraction:
     def __post_init__(self) -> None:
         """Derive ``guild_id`` from ``guild``."""
         self.guild_id = self.guild.id if self.guild is not None else None
+
+
+@asynccontextmanager
+async def memory_database() -> AsyncIterator[Database]:
+    """Yield a :class:`Database` on in-memory SQLite.
+
+    The ``StaticPool`` makes every session see the same database. Create your tables
+    from your ``Base.metadata`` before using it, and the engine is disposed on exit.
+
+    Yields:
+        A database on ``sqlite+aiosqlite:///:memory:``.
+    """
+    database = Database("sqlite+aiosqlite:///:memory:")
+    try:
+        yield database
+    finally:
+        await database.dispose()

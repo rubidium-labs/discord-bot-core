@@ -43,6 +43,7 @@ dev = [
     "pytest-cov",
     "ruff",
     "mypy",
+    "aiosqlite>=0.22.1",
 ]
 
 [tool.hatch.build.targets.wheel]
