@@ -24,3 +24,5 @@ listed under **Changed** or **Removed**.
   [configuration](docs/configuration.md), [testing](docs/testing.md).
 - Repository files: `README.md`, `CONTRIBUTING.md`, `LICENSE` (MIT), `.env.example`.
 - Settings package: `CoreSettings`, `load(secrets_dir=...)`, `describe()`.
+- Bot package: `CoreBot`, `CoreCommandTree` (on_error delegation, invocation logging),
+  `launch()`, sync helpers, `register_cleanup`.
