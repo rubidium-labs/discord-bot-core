@@ -87,7 +87,9 @@ Testing a bot built on the core: [docs/testing.md](docs/testing.md).
 - [Design](docs/design.md): architecture, layers, decisions and their reasons
 - [Getting started](docs/getting-started.md): from zero to a running bot with one cog
 - [Configuration](docs/configuration.md): every setting
+- [Dev guild and sync](docs/dev-guild-and-sync.md): where commands live, `/core sync`
+- [Extensions](docs/extensions.md): discovery, `/core ext`, autocomplete
 - [Testing](docs/testing.md): tests without Discord
-- Coming with the implementation PRs: dev guild and sync, extensions, database and
+- Coming with the implementation PRs: database and
   session, error handling, UI kit, releasing (page map: design section 16)
 - [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
