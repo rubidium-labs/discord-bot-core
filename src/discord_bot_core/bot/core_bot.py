@@ -166,15 +166,23 @@ class CoreBot(commands.Bot):
         return await self.tree.sync(guild=dev)
 
     async def sync_dev_guild_once(self) -> list[app_commands.AppCommand]:
-        """Log in without the gateway and sync the dev guild, for bootstrap.
+        """Log in without the gateway and sync only the core commands, for bootstrap.
 
         Call it inside ``async with bot:`` so the login and :meth:`setup_hook`
-        run first; the websocket is never opened.
+        run first; the websocket is never opened. Unlike :meth:`sync_dev_guild`
+        this does **not** copy the global commands into the dev guild: it removes
+        every guild-scoped command except the ``/core`` group and syncs, so a
+        fresh application gets exactly the ``/core`` commands it needs to load
+        the extensions (and their commands) itself.
 
         Returns:
             The commands Discord reports as synced.
         """
-        return await self.sync_dev_guild()
+        dev = discord.Object(id=self.settings.dev_guild_id)
+        for command in self.tree.get_commands(guild=dev):
+            if command.name != _CORE_GROUP_NAME:
+                self.tree.remove_command(command.name, guild=dev)
+        return await self.tree.sync(guild=dev)
 
     def launch(self) -> None:
         """Configure logging and run the bot with the configured token.

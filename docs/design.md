@@ -386,7 +386,10 @@ async def sync_once() -> None:
 **[verified: `Client.login` fetches `application_info`, sets `application_id`, then calls
 `setup_hook`; no websocket is opened.]** The app exposes it as `python -m rubidium_bot
 sync-dev` (the getting-started page shows the 10 lines). It syncs the **dev guild only**,
-it is run by a human on purpose, and it is never part of a normal start. This is the one
+it is run by a human on purpose, and it is never part of a normal start. The bootstrap syncs
+**only the `/core` group** — it never copies the global commands into the dev guild — so a
+fresh application gets exactly the commands it needs to load the extensions itself; cog
+commands appear after `/core ext load` + `/core sync dev`. This is the one
 place where the design reads the brief's "sync is a command" broadly (a CLI command);
 it is listed in open questions (19).
 

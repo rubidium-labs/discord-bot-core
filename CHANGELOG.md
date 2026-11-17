@@ -11,6 +11,11 @@ listed under **Changed** or **Removed**.
 
 ### Changed
 
+- `CoreBot.sync_dev_guild_once()` (the `sync-dev` bootstrap) now publishes **only the
+  `/core` group** to the dev guild: it removes every other guild-scoped command and no
+  longer copies the global commands over. A fresh application gets exactly the commands
+  needed to load extensions itself; cog commands appear after `/core ext load` +
+  `/core sync dev`.
 - CI only: `.github/workflows/main.yml` no longer has `deploy-dev`/`deploy-prod` jobs
   and no longer triggers on `v*` tags — a library has no compose file, so there is
   nothing to deploy. `docs/releasing.md` updated accordingly.
