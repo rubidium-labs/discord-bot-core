@@ -186,7 +186,9 @@ uv run python -m my_bot              # start the bot
 
 The first sync is a one-shot you run on purpose: on a fresh application the `/core`
 commands do not exist in Discord yet, and they are what registers everything else
-([design section 8](design.md#8-dev-guild-and-sync)). The bot never syncs by itself at
+([design section 8](design.md#8-dev-guild-and-sync)). It publishes **only the `/core`
+group** to the dev guild — not the cogs' commands — so you can then load extensions
+yourself. The bot never syncs by itself at
 start (Discord rate-limits it). After that first run:
 
 - In the dev guild, run `/core sync dev`: in `dev` the app's commands are copied there

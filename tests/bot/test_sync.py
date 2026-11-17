@@ -162,8 +162,30 @@ async def test_sync_guild_targets_given_guild() -> None:
     assert tree.synced == [99]
 
 
-async def test_sync_dev_guild_once_syncs_dev_guild() -> None:
+async def test_sync_dev_guild_once_syncs_only_core_no_copy() -> None:
+    """Bootstrap syncs the dev guild but never copies global commands over.
+
+    A fresh application must get exactly the ``/core`` group (which loads the
+    extensions); cog commands are registered by ``/core ext load`` + a later
+    ``/core sync dev``, not by the bootstrap.
+    """
+    from discord_bot_core.commands.admin import CoreCog
+
     bot, tree = _bot_with_spy()
+    await bot.add_cog(CoreCog(bot), guild=discord.Object(id=DEV_GUILD_ID))
+
+    @app_commands.command(name="cogcmd")
+    async def cogcmd(interaction: discord.Interaction) -> None:
+        pass
+
+    tree.add_command(cogcmd)  # global command a loaded cog would add
+
     await bot.sync_dev_guild_once()
-    assert tree.calls == ["copy", "sync"]
+    assert tree.calls == ["remove", "sync"] or tree.calls == ["sync"]
+    assert "copy" not in tree.calls
     assert tree.synced == [DEV_GUILD_ID]
+    names = {
+        command.name
+        for command in tree.get_commands(guild=discord.Object(id=DEV_GUILD_ID))
+    }
+    assert names == {"core"}
