@@ -556,7 +556,14 @@ translated.
 
 - **Catalog.** `i18n/core_catalog.py` registers every core key in `CORE_CATALOG` with
   both `en-US` and `fr`. Keys are symbolic and namespaced: `core.*` (the admin cog),
-  `errors.*` (the error handler) and `ui.*` (the UI kit's built-in text).
+  `errors.*` (the error handler) and `ui.*` (the UI kit's built-in text). `CORE_CATALOG`
+  is just the core's own catalog; a bot passes the core one plus its app catalogs to
+  `CoreTranslator`.
+- **Runtime fallback.** `default_text`/`translate` resolve their `en-US` fallback
+  against the bot's catalogs (`i18n.runtime.use_catalogs`), not only `CORE_CATALOG`.
+  `CoreBot.setup_hook` wires the translator's catalogs in, so app keys (e.g.
+  `secret_santa.*`) resolve without mirroring them into `CORE_CATALOG`; before wiring,
+  the helpers search `CORE_CATALOG` only.
 - **Descriptions (sync time).** `@app_commands.command(description=...)`, group
   descriptions and `@app_commands.describe(...)` parameters carry
   `locale_str("…key…")`; `CoreTranslator` resolves them for every locale at

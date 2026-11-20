@@ -2,13 +2,44 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Any
 
 import discord
 import pytest
 
-from discord_bot_core.i18n import CORE_CATALOG, default_text, translate
+from discord_bot_core.i18n import (
+    CORE_CATALOG,
+    TranslationCatalog,
+    default_text,
+    translate,
+    use_catalogs,
+)
 from discord_bot_core.testing import FakeInteraction
+
+
+@pytest.fixture(autouse=True)
+def _reset_runtime_catalogs() -> Iterator[None]:
+    use_catalogs([CORE_CATALOG])
+    yield
+    use_catalogs([CORE_CATALOG])
+
+
+def _app_catalog() -> TranslationCatalog:
+    catalog = TranslationCatalog()
+    catalog.register(
+        "secret_santa.start", {"en-US": "Secret Santa starts!", "fr": "Secret Santa !"}
+    )
+    return catalog
+
+
+class FrenchAppInteraction(FakeInteraction):
+    def __init__(self, catalog: TranslationCatalog) -> None:
+        super().__init__()
+        self._catalog = catalog
+
+    async def translate(self, string: Any, **kwargs: Any) -> str | None:
+        return self._catalog.get(string.message, discord.Locale.french)
 
 
 class FrenchInteraction(FakeInteraction):
@@ -43,6 +74,33 @@ def test_default_text_reads_en_us() -> None:
 def test_default_text_raises_for_unknown_key() -> None:
     with pytest.raises(KeyError):
         default_text("core.missing")
+
+
+def test_use_catalogs_resolves_app_key_default_text() -> None:
+    catalog = _app_catalog()
+    use_catalogs([CORE_CATALOG, catalog])
+    assert default_text("secret_santa.start") == "Secret Santa starts!"
+    assert default_text("core.sync.done") == "Commands synced"
+
+
+async def test_use_catalogs_resolves_app_key_translate() -> None:
+    catalog = _app_catalog()
+    use_catalogs([CORE_CATALOG, catalog])
+    assert (
+        await translate(FakeInteraction(), "secret_santa.start")
+        == "Secret Santa starts!"
+    )
+    assert (
+        await translate(FrenchAppInteraction(catalog), "secret_santa.start")
+        == "Secret Santa !"
+    )
+
+
+def test_use_catalogs_restores_core_only_behaviour() -> None:
+    use_catalogs([CORE_CATALOG, _app_catalog()])
+    use_catalogs([CORE_CATALOG])
+    with pytest.raises(KeyError):
+        default_text("secret_santa.start")
 
 
 async def test_translate_without_translate_falls_back_to_english() -> None:

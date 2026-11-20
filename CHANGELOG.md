@@ -48,6 +48,13 @@ listed under **Changed** or **Removed**.
 
 ### Fixed
 
+- i18n runtime helpers now resolve against the bot's catalogs, not only
+  `CORE_CATALOG`: new `i18n.runtime.use_catalogs(catalogs)` (re-exported as
+  `i18n.use_catalogs`) is called by `CoreBot.setup_hook` with the translator's
+  catalogs, so `default_text`/`translate` find application keys (e.g.
+  `secret_santa.*`) in their `en-US`/locale fallback without apps mirroring their
+  keys into `CORE_CATALOG`. `CORE_CATALOG` remains the core's own catalog; before
+  wiring, the helpers search it alone.
 - `UserFacingError` now accepts an optional `message_key` and `format_args`; the
   error handler replies with that catalog key translated to the invoking user's
   locale while the exception's `message` stays the English logged/fallback text.

@@ -14,7 +14,7 @@ from discord_bot_core.bot.tree import CoreCommandTree
 from discord_bot_core.commands.admin import CoreCog
 from discord_bot_core.errors import ErrorHandler
 from discord_bot_core.extensions import ExtensionManager
-from discord_bot_core.i18n import CORE_CATALOG, CoreTranslator
+from discord_bot_core.i18n import CORE_CATALOG, CoreTranslator, runtime
 from discord_bot_core.infrastructure.database import Database
 from discord_bot_core.logging_config import configure_logging
 from discord_bot_core.settings import CoreSettings, Environment
@@ -113,6 +113,7 @@ class CoreBot(commands.Bot):
         else:
             logger.info("Database configured")
         await self.tree.set_translator(self.translator)
+        runtime.use_catalogs(self.translator.catalogs)
         await self.configure()
         await self.add_cog(
             CoreCog(self), guild=discord.Object(id=self.settings.dev_guild_id)

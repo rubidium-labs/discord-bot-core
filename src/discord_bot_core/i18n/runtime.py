@@ -5,22 +5,49 @@ Descriptions are translated once, at sync time, by :class:`CoreTranslator` throu
 ``interaction.translate``. :func:`translate` wraps that call and falls back to the
 ``en-US`` catalog text when the interaction has no translator (a fake in tests) or
 returns nothing.
+
+The fallback resolves the key against the bot's own catalogs (core *and*
+application ones), not only ``CORE_CATALOG``: :class:`~discord_bot_core.bot.CoreBot`
+calls :func:`use_catalogs` in ``setup_hook`` with its translator's catalogs. Until
+then, :data:`_RUNTIME_CATALOGS` holds only ``CORE_CATALOG``.
 """
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 import discord
 from discord import app_commands
 
+from discord_bot_core.i18n.catalog import TranslationCatalog
 from discord_bot_core.i18n.core_catalog import CORE_CATALOG
 
-__all__ = ["default_text", "translate"]
+__all__ = ["default_text", "translate", "use_catalogs"]
+
+_RUNTIME_CATALOGS: list[TranslationCatalog] = [CORE_CATALOG]
+"""The catalogs the runtime fallback searches; set by :func:`use_catalogs`."""
+
+
+def use_catalogs(catalogs: Sequence[TranslationCatalog]) -> None:
+    """Set the catalogs the runtime helpers search, in order.
+
+    Internal-ish: :class:`~discord_bot_core.bot.CoreBot` calls it in
+    ``setup_hook`` with the bot's translator catalogs, so application keys resolve
+    there without touching ``CORE_CATALOG``. Tests may call it to isolate state
+    (``use_catalogs([CORE_CATALOG])`` restores core-only behaviour).
+
+    Args:
+        catalogs: The catalogs to search, in order; an empty list falls back to
+            ``[CORE_CATALOG]`` so the helpers always have somewhere to look.
+    """
+    _RUNTIME_CATALOGS[:] = list(catalogs) or [CORE_CATALOG]
 
 
 def default_text(key: str) -> str:
     """Return the ``en-US`` text of ``key``, the fallback when nothing translates it.
+
+    Searches the runtime catalogs (see :func:`use_catalogs`) in order.
 
     Args:
         key: The symbolic message key.
@@ -29,12 +56,13 @@ def default_text(key: str) -> str:
         The English text.
 
     Raises:
-        KeyError: If the catalog has no ``en-US`` entry for ``key``.
+        KeyError: If no catalog has an ``en-US`` entry for ``key``.
     """
-    text = CORE_CATALOG.get(key, discord.Locale.american_english)
-    if text is None:
-        raise KeyError(f"CORE_CATALOG has no en-US entry for {key!r}")
-    return text
+    for catalog in _RUNTIME_CATALOGS:
+        text = catalog.get(key, discord.Locale.american_english)
+        if text is not None:
+            return text
+    raise KeyError(f"No runtime catalog has an en-US entry for {key!r}")
 
 
 def _format(text: str, format_args: dict[str, Any]) -> str:

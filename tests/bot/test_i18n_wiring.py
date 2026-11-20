@@ -77,3 +77,25 @@ async def test_core_sync_reply_is_translated() -> None:
         assert embed.title == "Commandes synchronisées"
     finally:
         await bot.close()
+
+
+async def test_setup_hook_registers_translator_catalogs_for_runtime() -> None:
+    from discord_bot_core.i18n import (
+        CORE_CATALOG,
+        TranslationCatalog,
+        default_text,
+        runtime,
+    )
+
+    app_catalog = TranslationCatalog()
+    app_catalog.register("secret_santa.start", {"en-US": "Secret Santa starts!"})
+    bot = CoreBot(
+        _settings(),
+        translator=CoreTranslator([CORE_CATALOG, app_catalog]),
+    )
+    try:
+        await bot.setup_hook()
+        assert default_text("secret_santa.start") == "Secret Santa starts!"
+    finally:
+        runtime.use_catalogs([CORE_CATALOG])
+        await bot.close()
