@@ -22,6 +22,14 @@ listed under **Changed** or **Removed**.
 
 ### Added
 
+- i18n module (`discord_bot_core.i18n`): `TranslationCatalog` (symbolic keys →
+  per-locale strings), `CoreTranslator` (a `discord.app_commands.Translator` that
+  localizes command descriptions at sync time and runtime replies per invoking
+  user's locale, falling back to `default_locale`) and `CORE_CATALOG`.
+  `CoreBot` builds the translator (or accepts one) and registers it in
+  `setup_hook`; new `default_locale` setting (default `en-US`). The `/core sync`
+  success reply is localized as the first example; command names are not
+  translated.
 - Guides: [error handling](docs/error-handling.md) and
   [releasing](docs/releasing.md); README links every docs page.
 - Real-database transactional tests (`tests/commands/test_transactional_real_db.py`):

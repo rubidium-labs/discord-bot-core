@@ -21,6 +21,7 @@ is the field name, lower case, in the secrets directory (see below).
 | `log_level` | `DEBUG`, `INFO`, `WARNING`, `ERROR` or `CRITICAL` | no | no | `LOG_LEVEL` | — | `INFO` |
 | `error_log_channel_id` | `PositiveInt \| None` | no | no | `ERROR_LOG_CHANNEL_ID` | — | `None` (feature off) |
 | `database_url` | `SecretStr \| None` | no | **yes** (the URL may embed a password) | `DATABASE_URL` | `database_url` | `None` (the bot runs without a database) |
+| `default_locale` | `discord.Locale` value (e.g. `en-US`, `fr`) | no | no | `DEFAULT_LOCALE` | — | `en-US` |
 
 Notes:
 
@@ -39,6 +40,10 @@ Notes:
 - `database_url`: a SQLAlchemy async URL (`sqlite+aiosqlite:///...` needs the `sqlite`
   extra, `postgresql+asyncpg://...` the `postgres` extra). Nothing creates tables or runs
   migrations at start.
+- `default_locale`: the locale used when a message has no translation for the invoking
+  user's locale. It is validated against `discord.Locale` values at start; an unsupported
+  code fails like any other invalid field. Runtime replies use the user's own
+  `interaction.locale` when a translation exists; there is no guild or per-user override.
 - An app adds its own settings by subclassing `CoreSettings`. A field without a default is
   required, and it fails at start like the two required core fields.
 

@@ -14,6 +14,7 @@ from discord_bot_core.bot.tree import CoreCommandTree
 from discord_bot_core.commands.admin import CoreCog
 from discord_bot_core.errors import ErrorHandler
 from discord_bot_core.extensions import ExtensionManager
+from discord_bot_core.i18n import CORE_CATALOG, CoreTranslator
 from discord_bot_core.infrastructure.database import Database
 from discord_bot_core.logging_config import configure_logging
 from discord_bot_core.settings import CoreSettings, Environment
@@ -45,6 +46,7 @@ class CoreBot(commands.Bot):
         extensions_package: str | None = None,
         database: Database | None = None,
         error_handler: ErrorHandler | None = None,
+        translator: CoreTranslator | None = None,
         intents: discord.Intents | None = None,
         **options: Any,
     ) -> None:
@@ -59,6 +61,10 @@ class CoreBot(commands.Bot):
             database: The database, or ``None``; disposed by :meth:`close`.
             error_handler: The error handler; defaults to one built from
                 ``settings``.
+            translator: The command translator; defaults to a
+                :class:`~discord_bot_core.i18n.CoreTranslator` over the core catalog
+                using ``settings.default_locale``. It is registered on the tree in
+                :meth:`setup_hook`.
             intents: The gateway intents; defaults to
                 :meth:`discord.Intents.default`, which requests no privileged
                 intent.
@@ -73,6 +79,9 @@ class CoreBot(commands.Bot):
         self.settings = settings
         self.database: Database | None = database
         self.error_handler = error_handler or ErrorHandler(settings)
+        self.translator: CoreTranslator = translator or CoreTranslator(
+            [CORE_CATALOG], default_locale=discord.Locale(settings.default_locale)
+        )
         self.extensions_package = extensions_package
         self.extension_manager: ExtensionManager | None = (
             ExtensionManager(self, extensions_package)
@@ -92,15 +101,18 @@ class CoreBot(commands.Bot):
         """Prepare the bot before the gateway connects.
 
         Logs whether a database is configured (never its URL), calls
-        :meth:`configure`, adds the core cog scoped to the dev guild (so ``/core``
-        exists only there) and, when ``extensions_package`` was given, loads the
-        extensions. A failing extension is logged with its traceback and the bot
-        continues; nothing is synced here.
+        :meth:`configure`, registers :attr:`translator` on the tree (before any
+        command is added or synced, so descriptions can be localized), adds the
+        core cog scoped to the dev guild (so ``/core`` exists only there) and,
+        when ``extensions_package`` was given, loads the extensions. A failing
+        extension is logged with its traceback and the bot continues; nothing is
+        synced here.
         """
         if self.database is None:
             logger.info("No database configured")
         else:
             logger.info("Database configured")
+        await self.tree.set_translator(self.translator)
         await self.configure()
         await self.add_cog(
             CoreCog(self), guild=discord.Object(id=self.settings.dev_guild_id)

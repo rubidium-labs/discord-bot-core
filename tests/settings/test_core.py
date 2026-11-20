@@ -248,3 +248,17 @@ def test_describe_with_database_and_error_channel() -> None:
     }
     assert DATABASE_URL not in str(described)
     assert "hunter2" not in str(described)
+
+
+def test_default_locale_defaults_to_en_us() -> None:
+    assert make_settings().default_locale == "en-US"
+
+
+def test_default_locale_accepts_a_supported_locale() -> None:
+    assert make_settings(default_locale="fr").default_locale == "fr"
+
+
+def test_default_locale_rejects_an_invalid_value() -> None:
+    with pytest.raises(ValidationError) as excinfo:
+        make_settings(default_locale="xx-YY")
+    assert excinfo.value.errors()[0]["loc"] == ("default_locale",)
