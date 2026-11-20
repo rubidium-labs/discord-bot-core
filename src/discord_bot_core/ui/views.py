@@ -11,10 +11,13 @@ from typing import Any, Protocol
 
 import discord
 
+from discord_bot_core.i18n import default_text, translate
+
 logger = logging.getLogger(__name__)
 
 MAX_TIMEOUT = 14 * 60.0
-OTHER_USER_MESSAGE = "This menu belongs to someone else."
+OTHER_USER_MESSAGE = default_text("ui.view.other_user")
+"""The English text; the reply itself is translated per the user's locale."""
 
 __all__ = [
     "MAX_TIMEOUT",
@@ -150,7 +153,9 @@ class SingleUserView(BaseView):
         """
         if interaction.user.id == self.user_id:
             return True
-        await interaction.response.send_message(OTHER_USER_MESSAGE, ephemeral=True)
+        await interaction.response.send_message(
+            await translate(interaction, "ui.view.other_user"), ephemeral=True
+        )
         return False
 
 

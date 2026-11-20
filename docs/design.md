@@ -547,6 +547,33 @@ available for special cases and run first, discord.py's `_has_any_error_handlers
 untouched); a `try/except Exception` inside every cog method; ignoring `CheckFailure`
 silently (a user must be told why nothing happened); sending tracebacks to Discord.
 
+### 10.1 Internationalisation (i18n)
+
+Only the strings the core itself prints are translated; command **names** are never
+translated.
+
+- **Catalog.** `i18n/core_catalog.py` registers every core key in `CORE_CATALOG` with
+  both `en-US` and `fr`. Keys are symbolic and namespaced: `core.*` (the admin cog),
+  `errors.*` (the error handler) and `ui.*` (the UI kit's built-in text).
+- **Descriptions (sync time).** `@app_commands.command(description=...)`, group
+  descriptions and `@app_commands.describe(...)` parameters carry
+  `locale_str("…key…")`; `CoreTranslator` resolves them for every locale at
+  `CommandTree.sync`, so Discord stores the translations.
+- **Replies (runtime).** Replies and embeds are translated per the invoking user's
+  locale through `interaction.translate(locale_str(key))`. The helper
+  `i18n.translate(interaction, key, **format_args)` wraps it and falls back to the
+  `en-US` catalog text when the interaction has no translator (fakes in tests) or the
+  translator returns `None`; placeholders are filled with `str.format`.
+  `i18n.default_text(key)` returns the English text, used for messages carried by an
+  exception (application-supplied `UserFacingError` text is passed through unchanged).
+- **Error handler.** The ephemeral reply to the user is translated; the error-log
+  channel embed stays in English on purpose (it is for the team, and mixing locales
+  there is noise). The generic message is the `errors.generic` key with an
+  `{error_id}` placeholder.
+- **UI kit.** `ui/embeds.py` and `ui/status.py` take strings as arguments and hold no
+  built-in user-facing literals (the only literal is a doctest); `ui/views.py`'s
+  `OTHER_USER_MESSAGE` is the `ui.view.other_user` key.
+
 ## 11. Database infrastructure
 
 `infrastructure/database/`, no `discord` import.

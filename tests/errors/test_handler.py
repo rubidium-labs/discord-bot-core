@@ -9,9 +9,17 @@ import pytest
 from discord import app_commands
 
 from discord_bot_core.errors import ErrorHandler, OwnerOnlyError, UserFacingError
+from discord_bot_core.i18n import CORE_CATALOG
 from discord_bot_core.testing import FakeInteraction
 
 GENERIC = "Something went wrong. Error id: `"
+
+
+class FrenchInteraction(FakeInteraction):
+    """A fake interaction whose ``translate`` returns the French catalog text."""
+
+    async def translate(self, string: Any, **kwargs: Any) -> str | None:
+        return CORE_CATALOG.get(string.message, discord.Locale.french)
 
 
 @dataclass
@@ -313,3 +321,89 @@ async def test_report_not_sent_for_expected_errors() -> None:
     await handler.handle(FakeInteraction(client=client), UserFacingError("nope"))
 
     assert not channel.sent
+
+
+async def test_generic_message_locale_uses_key_with_placeholder() -> None:
+    outcome = ErrorHandler(Settings()).classify(RuntimeError("boom"), "ab12cd34")
+    assert outcome.message == "errors.generic"
+    assert outcome.format_args == {"error_id": "ab12cd34"}
+
+
+@pytest.mark.parametrize(
+    ("error", "french"),
+    [
+        (OwnerOnlyError(), "Vous ne pouvez pas utiliser cette commande."),
+        (
+            app_commands.NoPrivateMessage(),
+            "Cette commande ne fonctionne que dans un serveur.",
+        ),
+        (
+            app_commands.CommandOnCooldown(_cooldown(), 4.4),
+            "Réessayez dans 4 s.",
+        ),
+        (
+            app_commands.CommandNotFound("nope", []),
+            "Cette commande est obsolète, réessayez dans quelques minutes.",
+        ),
+        (
+            app_commands.MissingPermissions(["manage_guild"]),
+            "Vous avez besoin de la ou des permissions Manage Server pour "
+            "utiliser cette commande.",
+        ),
+    ],
+)
+async def test_reply_is_translated_for_french_user(
+    error: BaseException, french: str
+) -> None:
+    interaction = FrenchInteraction()
+    handler = ErrorHandler(Settings())
+
+    await handler.handle(interaction, error)
+
+    assert interaction.response.sent[0].content == french
+
+
+async def test_user_facing_message_is_passed_through() -> None:
+    interaction = FrenchInteraction()
+    handler = ErrorHandler(Settings())
+
+    await handler.handle(interaction, UserFacingError("Domain says no."))
+
+    assert interaction.response.sent[0].content == "Domain says no."
+
+
+async def test_user_facing_message_that_looks_like_a_key_is_not_translated() -> None:
+    interaction = FrenchInteraction()
+    handler = ErrorHandler(Settings())
+
+    await handler.handle(interaction, UserFacingError("errors.generic"))
+
+    assert interaction.response.sent[0].content == "errors.generic"
+
+
+async def test_generic_reply_is_translated_with_error_id() -> None:
+    interaction = FrenchInteraction()
+    handler = ErrorHandler(Settings())
+
+    await handler.handle(interaction, RuntimeError("secret detail"))
+
+    content = interaction.response.sent[0].content
+    assert content is not None
+    assert content.startswith("Une erreur est survenue. Identifiant d'erreur : `")
+    error_id = content.split("`")[1]
+    assert len(error_id) == 8
+
+
+async def test_report_embed_stays_english_for_french_user() -> None:
+    channel = RecordingChannel()
+    client = FrenchInteraction().client
+    client.channels[42] = channel
+    handler = ErrorHandler(Settings(error_log_channel_id=42))
+
+    await handler.handle(FrenchInteraction(client=client), RuntimeError("boom"))
+
+    embed: discord.Embed = channel.sent[0]["embed"]
+    names = {field.name for field in embed.fields}
+    assert names == {"Command", "User", "Guild", "Exception", "Location"}
+    assert embed.title is not None
+    assert embed.title.startswith("Error ")

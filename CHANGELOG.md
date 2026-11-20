@@ -30,6 +30,16 @@ listed under **Changed** or **Removed**.
   `setup_hook`; new `default_locale` setting (default `en-US`). The `/core sync`
   success reply is localized as the first example; command names are not
   translated.
+- All remaining user-facing strings in the core are now in `CORE_CATALOG` (both
+  `en-US` and `fr`): the `/core` group/subcommand descriptions and parameter
+  descriptions (via `locale_str`, translated at sync time) and the `/core` replies
+  and embeds (sync fields, ext list/actions, errors) translated at runtime through
+  the new `i18n.translate(interaction, key, **format_args)` helper, which falls back
+  to the English catalog text when no translator is available. The error handler
+  translates its ephemeral reply per the invoking user's locale (the error-log
+  channel embed intentionally stays in English); application-supplied
+  `UserFacingError` messages are passed through unchanged. The UI kit's
+  `OTHER_USER_MESSAGE` is now the `ui.view.other_user` key.
 - Guides: [error handling](docs/error-handling.md) and
   [releasing](docs/releasing.md); README links every docs page.
 - Real-database transactional tests (`tests/commands/test_transactional_real_db.py`):

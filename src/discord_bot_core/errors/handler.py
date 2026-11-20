@@ -3,6 +3,10 @@
 ``CoreCommandTree.on_error`` (and the UI kit's ``BaseView``/``BaseModal``) delegate
 here. The handler classifies the error, replies ephemerally, logs it and — for
 unexpected errors only — optionally reports it to a log channel. It never raises.
+
+The ephemeral reply goes to the invoking user, so it is translated per that user's
+locale (falling back to ``en-US``). The error-log channel embed is for the team and
+stays in English on purpose, to avoid noise from mixed locales.
 """
 
 from __future__ import annotations
@@ -11,21 +15,17 @@ import logging
 import secrets
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import discord
 from discord import app_commands
 
 from discord_bot_core.errors.exceptions import OwnerOnlyError, UserFacingError
+from discord_bot_core.i18n import translate
 from discord_bot_core.settings import CoreSettings
 
 logger = logging.getLogger(__name__)
-
-GENERIC_MESSAGE = "Something went wrong. Error id: `{error_id}`."
-OUT_OF_DATE_MESSAGE = "This command is out of date, try again in a few minutes."
-CHECK_FAILURE_MESSAGE = "You can't use this command."
-NO_PRIVATE_MESSAGE = "This command only works in a server."
 
 _REPORT_WINDOW_SECONDS = 60.0
 
@@ -35,26 +35,29 @@ class Outcome:
     """The result of classifying an error.
 
     Attributes:
-        message: The text shown to the user.
+        message: The text shown to the user: either a symbolic catalog key (the
+            core's own messages, translated per the user's locale) or, for a
+            :class:`UserFacingError`, the application's own text (passed through).
         level: The log level for the error.
         expected: ``True`` for errors the handler understands (no traceback, no
             report); ``False`` for the unexpected path.
+        format_args: Values for the ``{placeholder}`` fields of a catalog key.
     """
 
     message: str
     level: int
     expected: bool
+    format_args: dict[str, Any] = field(default_factory=dict)
+    translatable: bool = True
 
 
-def _permissions_message(names: list[str]) -> str:
+def _permissions_names(names: list[str]) -> str:
     readable = [
         name.replace("_", " ").replace("guild", "server").title() for name in names
     ]
     if len(readable) == 1:
-        joined = readable[0]
-    else:
-        joined = ", ".join(readable[:-1]) + " and " + readable[-1]
-    return f"You need the {joined} permission(s) to use this command."
+        return readable[0]
+    return ", ".join(readable[:-1]) + " and " + readable[-1]
 
 
 def _last_frame_location(exc: BaseException) -> str:
@@ -133,10 +136,32 @@ class ErrorHandler:
                 extra={"error_id": error_id},
             )
             await self._report(interaction, original, error_id, name)
-        await self._reply(interaction, outcome.message)
+        await self._reply(
+            interaction,
+            await self._localized(interaction, outcome),
+        )
+
+    async def _localized(
+        self,
+        interaction: discord.Interaction,
+        outcome: Outcome,
+    ) -> str:
+        """Translate the outcome's message when it is a core key, else pass it through.
+
+        ``UserFacingError`` carries application text already (``translatable`` is
+        ``False``); only the core's own messages are translated, per the invoking
+        user's locale.
+        """
+        if not outcome.translatable:
+            return outcome.message
+        return await translate(interaction, outcome.message, **outcome.format_args)
 
     def classify(self, error: BaseException, error_id: str | None = None) -> Outcome:
         """Map an unwrapped exception to the message, log level and path.
+
+        The ``message`` of the returned outcome is a catalog key for the core's own
+        messages (translated per the user's locale when replying) or, for a
+        :class:`UserFacingError`, the application's own text.
 
         Args:
             error: The original exception (not a ``CommandInvokeError``).
@@ -146,40 +171,52 @@ class ErrorHandler:
             The outcome for this error.
         """
         if isinstance(error, UserFacingError):
-            return Outcome(error.message, logging.INFO, expected=True)
+            return Outcome(
+                error.message, logging.INFO, expected=True, translatable=False
+            )
         if isinstance(error, OwnerOnlyError):
-            return Outcome(CHECK_FAILURE_MESSAGE, logging.INFO, expected=True)
+            return Outcome("errors.check_failure", logging.INFO, expected=True)
         if isinstance(error, app_commands.NoPrivateMessage):
-            return Outcome(NO_PRIVATE_MESSAGE, logging.INFO, expected=True)
+            return Outcome("errors.no_private_message", logging.INFO, expected=True)
         if isinstance(
             error, (app_commands.MissingPermissions, app_commands.BotMissingPermissions)
         ):
             return Outcome(
-                _permissions_message(error.missing_permissions),
+                "errors.permissions",
                 logging.INFO,
                 expected=True,
+                format_args={
+                    "permissions": _permissions_names(error.missing_permissions)
+                },
             )
         if isinstance(error, app_commands.CommandOnCooldown):
             return Outcome(
-                f"Try again in {round(error.retry_after)} s.",
+                "errors.cooldown",
                 logging.INFO,
                 expected=True,
+                format_args={"seconds": round(error.retry_after)},
             )
         if isinstance(
             error, (app_commands.CommandNotFound, app_commands.CommandSignatureMismatch)
         ):
-            return Outcome(OUT_OF_DATE_MESSAGE, logging.WARNING, expected=True)
+            return Outcome("errors.out_of_date", logging.WARNING, expected=True)
         if isinstance(error, app_commands.TransformerError):
             return Outcome(
-                f"Invalid value for `{error.transformer._error_display_name}`.",
+                "errors.transformer",
                 logging.INFO,
                 expected=True,
+                format_args={"option": error.transformer._error_display_name},
             )
         if isinstance(error, app_commands.CheckFailure):
-            return Outcome(CHECK_FAILURE_MESSAGE, logging.INFO, expected=True)
+            return Outcome("errors.check_failure", logging.INFO, expected=True)
         if error_id is None:
             error_id = secrets.token_hex(4)
-        return Outcome(GENERIC_MESSAGE.format(error_id=error_id), logging.ERROR, False)
+        return Outcome(
+            "errors.generic",
+            logging.ERROR,
+            False,
+            format_args={"error_id": error_id},
+        )
 
     async def _reply(self, interaction: discord.Interaction, message: str) -> None:
         try:
