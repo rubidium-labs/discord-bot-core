@@ -6,6 +6,10 @@ which discord.py calls for a child command before running it, so non-owners get
 :class:`~discord_bot_core.errors.OwnerOnlyError` for every command. Replies are
 ephemeral embeds built here with plain :class:`discord.Embed` (there is no UI kit
 dependency yet).
+
+Descriptions carry ``locale_str`` keys, translated at sync time. Replies are
+translated at runtime with :func:`discord_bot_core.i18n.translate`, which falls
+back to the ``en-US`` catalog text when the interaction has no translator.
 """
 
 from __future__ import annotations
@@ -19,6 +23,7 @@ from discord.ext import commands
 
 from discord_bot_core.commands.checks import owner_only
 from discord_bot_core.errors import UserFacingError
+from discord_bot_core.i18n import default_text, translate
 from discord_bot_core.settings import Environment
 
 if TYPE_CHECKING:
@@ -32,9 +37,8 @@ MAX_CHOICES = 25
 _COLOUR_INFO = discord.Colour.blurple()
 _COLOUR_SUCCESS = discord.Colour.green()
 _COLOUR_WARNING = discord.Colour.orange()
-_DIRTY_HINT = "Command definitions changed; run `/core sync dev`."
-_SYNC_DONE_KEY = "core.sync.done"
-_SYNC_DONE_DEFAULT = "Commands synced"
+_NO_MANAGER_KEY = "core.ext.error.no_manager"
+_INVALID_GUILD_ID_KEY = "core.sync.guild.invalid"
 
 
 class _OwnerOnlyGroup(app_commands.Group):
@@ -73,9 +77,9 @@ def _short_name(full: str) -> str:
     return full.rsplit(".", 1)[-1]
 
 
-def _names(names: list[str]) -> str:
+def _names(names: list[str], none: str) -> str:
     if not names:
-        return "none"
+        return none
     return ", ".join(f"`{name}`" for name in names)
 
 
@@ -99,7 +103,9 @@ class CoreCog(commands.Cog):
     def _manager(self) -> Any:
         manager = self.bot.extension_manager
         if manager is None:
-            raise UserFacingError("No extensions package is configured.")
+            raise UserFacingError(
+                default_text(_NO_MANAGER_KEY), message_key=_NO_MANAGER_KEY
+            )
         return manager
 
     async def _is_owner(self, interaction: discord.Interaction) -> bool:
@@ -146,52 +152,56 @@ class CoreCog(commands.Cog):
             logger.warning("Extension autocomplete failed", exc_info=True)
             return []
 
-    async def _sync_title(self, interaction: discord.Interaction) -> str:
-        """Return the localized sync-success title for the invoking user.
-
-        Uses ``interaction.translate`` (which applies the user's locale); when the
-        interaction has no translator (a plain fake in tests), the English default
-        is used.
-
-        Args:
-            interaction: The invoking interaction.
-
-        Returns:
-            The translated title, or the English default.
-        """
-        translate = getattr(interaction, "translate", None)
-        if translate is None:
-            return _SYNC_DONE_DEFAULT
-        text: str | None = await translate(app_commands.locale_str(_SYNC_DONE_KEY))
-        return text if text is not None else _SYNC_DONE_DEFAULT
-
-    def _sync_embed(self, title: str, scope: str, commands: list[Any]) -> discord.Embed:
+    async def _sync_embed(
+        self,
+        interaction: discord.Interaction,
+        scope: str,
+        commands: list[Any],
+    ) -> discord.Embed:
         names = [command.name for command in commands]
-        embed = discord.Embed(title=title, colour=_COLOUR_SUCCESS)
-        embed.add_field(name="Scope", value=scope, inline=True)
-        embed.add_field(name="Count", value=str(len(names)), inline=True)
-        embed.add_field(name="Commands", value=_names(names), inline=False)
+        embed = discord.Embed(
+            title=await translate(interaction, "core.sync.done"),
+            colour=_COLOUR_SUCCESS,
+        )
+        embed.add_field(
+            name=await translate(interaction, "core.sync.field.scope"),
+            value=scope,
+            inline=True,
+        )
+        embed.add_field(
+            name=await translate(interaction, "core.sync.field.count"),
+            value=str(len(names)),
+            inline=True,
+        )
+        embed.add_field(
+            name=await translate(interaction, "core.sync.field.commands"),
+            value=_names(names, await translate(interaction, "core.ext.names.none")),
+            inline=False,
+        )
         return embed
 
     core = _OwnerOnlyGroup(
         name="core",
-        description="Core administration: command sync and extensions.",
+        description=app_commands.locale_str("core.group.description"),
         guild_only=True,
     )
 
     sync = _OwnerOnlyGroup(
         name="sync",
-        description="Publish the application commands.",
+        description=app_commands.locale_str("core.sync.group.description"),
         parent=core,
     )
 
     ext = _OwnerOnlyGroup(
         name="ext",
-        description="Load, unload, reload and list the extensions.",
+        description=app_commands.locale_str("core.ext.group.description"),
         parent=core,
     )
 
-    @sync.command(name="global", description="Publish the global commands.")
+    @sync.command(
+        name="global",
+        description=app_commands.locale_str("core.sync.global.description"),
+    )
     async def sync_global(self, interaction: discord.Interaction) -> None:
         """Sync the global commands and reply with the count.
 
@@ -199,17 +209,16 @@ class CoreCog(commands.Cog):
             interaction: The invoking interaction.
         """
         commands = await self.bot.sync_global()
-        embed = self._sync_embed(
-            await self._sync_title(interaction), "global", commands
+        embed = await self._sync_embed(
+            interaction,
+            await translate(interaction, "core.sync.scope.global"),
+            commands,
         )
         if self.bot.settings.environment is Environment.DEV:
             embed.colour = _COLOUR_WARNING
             embed.add_field(
-                name="Note",
-                value=(
-                    "environment is dev; global commands are normally "
-                    "not published here."
-                ),
+                name=await translate(interaction, "core.sync.devmode.field"),
+                value=await translate(interaction, "core.sync.devmode.note"),
                 inline=False,
             )
         logger.info(
@@ -219,7 +228,10 @@ class CoreCog(commands.Cog):
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @sync.command(name="dev", description="Sync the dev guild's commands.")
+    @sync.command(
+        name="dev",
+        description=app_commands.locale_str("core.sync.dev.description"),
+    )
     async def sync_dev(self, interaction: discord.Interaction) -> None:
         """Sync the dev guild: reset, copy and sync in dev; sync only in prod.
 
@@ -227,23 +239,25 @@ class CoreCog(commands.Cog):
             interaction: The invoking interaction.
         """
         commands = await self.bot.sync_dev_guild()
-        scope = "dev guild (reset, copy, sync)"
         if self.bot.settings.environment is Environment.PROD:
-            scope = "dev guild (admin commands only)"
+            scope = await translate(interaction, "core.sync.scope.dev_prod")
+        else:
+            scope = await translate(interaction, "core.sync.scope.dev")
         logger.info(
             "Synced commands scope=dev count=%d user=%s",
             len(commands),
             interaction.user.id,
         )
         await interaction.response.send_message(
-            embed=self._sync_embed(
-                await self._sync_title(interaction), scope, commands
-            ),
+            embed=await self._sync_embed(interaction, scope, commands),
             ephemeral=True,
         )
 
-    @sync.command(name="guild", description="Sync the commands of one guild.")
-    @app_commands.describe(guild_id="The guild id to sync to.")
+    @sync.command(
+        name="guild",
+        description=app_commands.locale_str("core.sync.guild.description"),
+    )
+    @app_commands.describe(guild_id=app_commands.locale_str("core.sync.guild.guild_id"))
     async def sync_guild(self, interaction: discord.Interaction, guild_id: str) -> None:
         """Sync one guild's commands, parsed from a string id.
 
@@ -256,10 +270,14 @@ class CoreCog(commands.Cog):
         """
         try:
             parsed = int(guild_id)
-        except ValueError as error:
-            raise UserFacingError(f"`{guild_id}` is not a valid guild id.") from error
+        except ValueError:
+            parsed = 0
         if parsed <= 0:
-            raise UserFacingError(f"`{guild_id}` is not a valid guild id.")
+            raise UserFacingError(
+                default_text(_INVALID_GUILD_ID_KEY).format(guild_id=guild_id),
+                message_key=_INVALID_GUILD_ID_KEY,
+                format_args={"guild_id": guild_id},
+            )
         commands = await self.bot.sync_guild(parsed)
         logger.info(
             "Synced commands scope=guild count=%d user=%s",
@@ -267,15 +285,20 @@ class CoreCog(commands.Cog):
             interaction.user.id,
         )
         await interaction.response.send_message(
-            embed=self._sync_embed(
-                await self._sync_title(interaction), f"guild {parsed}", commands
+            embed=await self._sync_embed(
+                interaction,
+                await translate(interaction, "core.sync.scope.guild", guild_id=parsed),
+                commands,
             ),
             ephemeral=True,
         )
 
-    @ext.command(name="load", description="Load an extension.")
+    @ext.command(
+        name="load",
+        description=app_commands.locale_str("core.ext.load.description"),
+    )
     @app_commands.autocomplete(name=_unloaded_autocomplete)
-    @app_commands.describe(name="The extension to load.")
+    @app_commands.describe(name=app_commands.locale_str("core.ext.load.name"))
     async def ext_load(self, interaction: discord.Interaction, name: str) -> None:
         """Load an extension and tell the owner to sync if the tree is dirty.
 
@@ -286,9 +309,12 @@ class CoreCog(commands.Cog):
         await self._manager().load(name)
         await self._ext_reply(interaction, "loaded", name)
 
-    @ext.command(name="unload", description="Unload an extension.")
+    @ext.command(
+        name="unload",
+        description=app_commands.locale_str("core.ext.unload.description"),
+    )
     @app_commands.autocomplete(name=_loaded_autocomplete)
-    @app_commands.describe(name="The extension to unload.")
+    @app_commands.describe(name=app_commands.locale_str("core.ext.unload.name"))
     async def ext_unload(self, interaction: discord.Interaction, name: str) -> None:
         """Unload an extension and tell the owner to sync if the tree is dirty.
 
@@ -299,9 +325,12 @@ class CoreCog(commands.Cog):
         await self._manager().unload(name)
         await self._ext_reply(interaction, "unloaded", name)
 
-    @ext.command(name="reload", description="Reload an extension.")
+    @ext.command(
+        name="reload",
+        description=app_commands.locale_str("core.ext.reload.description"),
+    )
     @app_commands.autocomplete(name=_loaded_autocomplete)
-    @app_commands.describe(name="The extension to reload.")
+    @app_commands.describe(name=app_commands.locale_str("core.ext.reload.name"))
     async def ext_reload(self, interaction: discord.Interaction, name: str) -> None:
         """Reload an extension and tell the owner to sync if the tree is dirty.
 
@@ -312,7 +341,10 @@ class CoreCog(commands.Cog):
         await self._manager().reload(name)
         await self._ext_reply(interaction, "reloaded", name)
 
-    @ext.command(name="list", description="List the extensions and their state.")
+    @ext.command(
+        name="list",
+        description=app_commands.locale_str("core.ext.list.description"),
+    )
     async def ext_list(self, interaction: discord.Interaction) -> None:
         """Reply with the loaded and available extensions.
 
@@ -322,15 +354,23 @@ class CoreCog(commands.Cog):
         manager = self._manager()
         loaded = manager.loaded()
         unloaded = manager.unloaded()
-        embed = discord.Embed(title="Extensions", colour=_COLOUR_INFO)
+        none = await translate(interaction, "core.ext.names.none")
+        embed = discord.Embed(
+            title=await translate(interaction, "core.ext.list.title"),
+            colour=_COLOUR_INFO,
+        )
         embed.add_field(
-            name=f"Loaded ({len(loaded)})",
-            value=_names([_short_name(name) for name in loaded]),
+            name=await translate(
+                interaction, "core.ext.list.loaded", count=len(loaded)
+            ),
+            value=_names([_short_name(name) for name in loaded], none),
             inline=False,
         )
         embed.add_field(
-            name=f"Available ({len(unloaded)})",
-            value=_names([_short_name(name) for name in unloaded]),
+            name=await translate(
+                interaction, "core.ext.list.available", count=len(unloaded)
+            ),
+            value=_names([_short_name(name) for name in unloaded], none),
             inline=False,
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
@@ -338,7 +378,18 @@ class CoreCog(commands.Cog):
     async def _ext_reply(
         self, interaction: discord.Interaction, action: str, name: str
     ) -> None:
-        embed = discord.Embed(title=f"Extension {action}", colour=_COLOUR_SUCCESS)
-        embed.add_field(name="Extension", value=_short_name(name), inline=True)
-        embed.add_field(name="Next", value=_DIRTY_HINT, inline=False)
+        embed = discord.Embed(
+            title=await translate(interaction, f"core.ext.action.{action}"),
+            colour=_COLOUR_SUCCESS,
+        )
+        embed.add_field(
+            name=await translate(interaction, "core.ext.field.extension"),
+            value=_short_name(name),
+            inline=True,
+        )
+        embed.add_field(
+            name=await translate(interaction, "core.ext.field.next"),
+            value=await translate(interaction, "core.ext.next.hint"),
+            inline=False,
+        )
         await interaction.response.send_message(embed=embed, ephemeral=True)

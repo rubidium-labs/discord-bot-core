@@ -10,6 +10,14 @@ Importing this package has no side effects beyond building the small core catalo
 
 from discord_bot_core.i18n.catalog import TranslationCatalog
 from discord_bot_core.i18n.core_catalog import CORE_CATALOG
+from discord_bot_core.i18n.runtime import default_text, translate, use_catalogs
 from discord_bot_core.i18n.translator import CoreTranslator
 
-__all__ = ["CORE_CATALOG", "CoreTranslator", "TranslationCatalog"]
+__all__ = [
+    "CORE_CATALOG",
+    "CoreTranslator",
+    "TranslationCatalog",
+    "default_text",
+    "translate",
+    "use_catalogs",
+]

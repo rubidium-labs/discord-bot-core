@@ -30,11 +30,41 @@ listed under **Changed** or **Removed**.
   `setup_hook`; new `default_locale` setting (default `en-US`). The `/core sync`
   success reply is localized as the first example; command names are not
   translated.
+- All remaining user-facing strings in the core are now in `CORE_CATALOG` (both
+  `en-US` and `fr`): the `/core` group/subcommand descriptions and parameter
+  descriptions (via `locale_str`, translated at sync time) and the `/core` replies
+  and embeds (sync fields, ext list/actions, errors) translated at runtime through
+  the new `i18n.translate(interaction, key, **format_args)` helper, which falls back
+  to the English catalog text when no translator is available. The error handler
+  translates its ephemeral reply per the invoking user's locale (the error-log
+  channel embed intentionally stays in English); application-supplied
+  `UserFacingError` messages are passed through unchanged. The UI kit's
+  `OTHER_USER_MESSAGE` is now the `ui.view.other_user` key.
 - Guides: [error handling](docs/error-handling.md) and
   [releasing](docs/releasing.md); README links every docs page.
 - Real-database transactional tests (`tests/commands/test_transactional_real_db.py`):
   the §12.5 contract against `testing.memory_database()` with commit/rollback/close
   asserted on rows a second session sees.
+
+### Fixed
+
+- i18n runtime helpers now resolve against the bot's catalogs, not only
+  `CORE_CATALOG`: new `i18n.runtime.use_catalogs(catalogs)` (re-exported as
+  `i18n.use_catalogs`) is called by `CoreBot.setup_hook` with the translator's
+  catalogs, so `default_text`/`translate` find application keys (e.g.
+  `secret_santa.*`) in their `en-US`/locale fallback without apps mirroring their
+  keys into `CORE_CATALOG`. `CORE_CATALOG` remains the core's own catalog; before
+  wiring, the helpers search it alone.
+- `UserFacingError` now accepts an optional `message_key` and `format_args`; the
+  error handler replies with that catalog key translated to the invoking user's
+  locale while the exception's `message` stays the English logged/fallback text.
+  The core's own failures (`core.ext.error.no_manager`, `core.sync.guild.invalid`)
+  use it, so their French translations reach the user; plain
+  `UserFacingError(message)` behaviour is unchanged.
+- `i18n.translate` treats a translator result that is `None` or still echoes its
+  input (the key or the `locale_str`) as untranslated and falls back to the
+  `en-US` text, and a `{placeholder}`/argument mismatch now returns the unformatted
+  text instead of raising — a bad catalog entry can no longer break a reply.
 
 ### Changed
 

@@ -5,6 +5,8 @@ them into user-visible replies. Applications subclass :class:`UserFacingError` f
 their own expected failures (for example ``NotEnoughParticipants``).
 """
 
+from typing import Any
+
 from discord import app_commands
 
 
@@ -15,20 +17,37 @@ class CoreError(Exception):
 class UserFacingError(CoreError):
     """An expected failure whose message is shown to the user who triggered it.
 
-    The message is also logged at INFO, so it must not contain sensitive data.
+    The message is also logged at INFO, so it must not contain sensitive data. The
+    core's own errors pass a catalog ``message_key`` too: the handler replies with
+    that key translated to the invoking user's locale, while ``message`` stays the
+    English text used for logging and as the fallback.
 
     Attributes:
-        message: The text shown to the user.
+        message: The text shown to the user when no ``message_key`` is set.
+        message_key: The catalog key whose translation is shown instead, if any.
+        format_args: Values for the ``{placeholder}`` fields of the key's text.
     """
 
-    def __init__(self, message: str) -> None:
+    def __init__(
+        self,
+        message: str,
+        *,
+        message_key: str | None = None,
+        format_args: dict[str, Any] | None = None,
+    ) -> None:
         """Create the error.
 
         Args:
-            message: The text shown to the user.
+            message: The text shown to the user, or the English fallback text when
+                ``message_key`` is set.
+            message_key: A catalog key whose translation replaces ``message`` in the
+                reply, keeping ``message`` as the logged/fallback text.
+            format_args: Values for the ``{placeholder}`` fields of the key's text.
         """
         super().__init__(message)
         self.message = message
+        self.message_key = message_key
+        self.format_args = format_args or {}
 
     def __str__(self) -> str:
         """Return the user-visible message."""

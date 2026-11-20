@@ -88,6 +88,24 @@ async def test_single_user_view_other() -> None:
     assert sent.content == OTHER_USER_MESSAGE
 
 
+async def test_single_user_view_other_is_translated() -> None:
+    from typing import Any
+
+    from discord_bot_core.i18n import CORE_CATALOG
+
+    class FrenchInteraction(FakeInteraction):
+        async def translate(self, string: Any, **kwargs: Any) -> str | None:
+            return CORE_CATALOG.get(string.message, discord.Locale.french)
+
+    view = SingleUserView(user_id=7)
+    interaction = FrenchInteraction(user=FakeUser(id=8))
+    assert await view.interaction_check(interaction) is False
+    assert (
+        interaction.response.sent[0].content
+        == "Ce menu appartient à quelqu'un d'autre."
+    )
+
+
 async def test_view_on_error_delegates() -> None:
     handler = RecordingHandler()
     interaction = FakeInteraction(client=FakeClient(error_handler=handler))

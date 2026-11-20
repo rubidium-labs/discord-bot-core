@@ -480,7 +480,7 @@ that should be user-visible (the owner check is a command check, not a tree chec
 
    | Exception | User sees (ephemeral) | Log |
    |---|---|---|
-   | `UserFacingError` (or subclass) | its `.message` | INFO, no traceback |
+   | `UserFacingError` (or subclass) | its `.message`, or its `message_key` translated | INFO, no traceback |
    | `OwnerOnlyError`, `app_commands.CheckFailure` | "You can't use this command." | INFO |
    | `NoPrivateMessage` | "This command only works in a server." | INFO |
    | `MissingPermissions`, `BotMissingPermissions` | permissions named | INFO |
@@ -522,7 +522,9 @@ that should be user-visible (the owner check is a command check, not a tree chec
 ```python
 class CoreError(Exception): ...                          # base of everything the core raises
 class UserFacingError(CoreError):
-    def __init__(self, message: str) -> None: ...        # .message, str(self) == message
+    def __init__(self, message: str, *,
+                 message_key: str | None = None,      # catalog key translated in the reply
+                 format_args: dict | None = None) -> None: ...  # .message, str(self) == message
 class DatabaseNotConfiguredError(CoreError): ...          # programmer/config error, generic message + id
 class NoActiveSessionError(CoreError): ...                # get_session() without @transactional
 class ExternalServiceError(CoreError): ...                # clients layer
@@ -546,6 +548,44 @@ the exception reaches the tree, so the error reply never races an open transacti
 available for special cases and run first, discord.py's `_has_any_error_handlers` rule is
 untouched); a `try/except Exception` inside every cog method; ignoring `CheckFailure`
 silently (a user must be told why nothing happened); sending tracebacks to Discord.
+
+### 10.1 Internationalisation (i18n)
+
+Only the strings the core itself prints are translated; command **names** are never
+translated.
+
+- **Catalog.** `i18n/core_catalog.py` registers every core key in `CORE_CATALOG` with
+  both `en-US` and `fr`. Keys are symbolic and namespaced: `core.*` (the admin cog),
+  `errors.*` (the error handler) and `ui.*` (the UI kit's built-in text). `CORE_CATALOG`
+  is just the core's own catalog; a bot passes the core one plus its app catalogs to
+  `CoreTranslator`.
+- **Runtime fallback.** `default_text`/`translate` resolve their `en-US` fallback
+  against the bot's catalogs (`i18n.runtime.use_catalogs`), not only `CORE_CATALOG`.
+  `CoreBot.setup_hook` wires the translator's catalogs in, so app keys (e.g.
+  `secret_santa.*`) resolve without mirroring them into `CORE_CATALOG`; before wiring,
+  the helpers search `CORE_CATALOG` only.
+- **Descriptions (sync time).** `@app_commands.command(description=...)`, group
+  descriptions and `@app_commands.describe(...)` parameters carry
+  `locale_str("…key…")`; `CoreTranslator` resolves them for every locale at
+  `CommandTree.sync`, so Discord stores the translations.
+- **Replies (runtime).** Replies and embeds are translated per the invoking user's
+  locale through `interaction.translate(locale_str(key))`. The helper
+  `i18n.translate(interaction, key, **format_args)` wraps it and falls back to the
+  `en-US` catalog text when the interaction has no translator (fakes in tests) or the
+  translator returns `None` or echoes its input (the key, or the `locale_str`); a
+  `{placeholder}`/argument mismatch returns the unformatted text instead of raising.
+  `i18n.default_text(key)` returns the English text. A `UserFacingError` may carry a
+  `message_key` (plus `format_args`): the handler replies with that key translated
+  per the user's locale, and the exception's `message` stays the English
+  logged/fallback text. Application-supplied `UserFacingError` text without a key is
+  passed through unchanged.
+- **Error handler.** The ephemeral reply to the user is translated; the error-log
+  channel embed stays in English on purpose (it is for the team, and mixing locales
+  there is noise). The generic message is the `errors.generic` key with an
+  `{error_id}` placeholder.
+- **UI kit.** `ui/embeds.py` and `ui/status.py` take strings as arguments and hold no
+  built-in user-facing literals (the only literal is a doctest); `ui/views.py`'s
+  `OTHER_USER_MESSAGE` is the `ui.view.other_user` key.
 
 ## 11. Database infrastructure
 
