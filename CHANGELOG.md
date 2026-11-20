@@ -46,6 +46,19 @@ listed under **Changed** or **Removed**.
   the §12.5 contract against `testing.memory_database()` with commit/rollback/close
   asserted on rows a second session sees.
 
+### Fixed
+
+- `UserFacingError` now accepts an optional `message_key` and `format_args`; the
+  error handler replies with that catalog key translated to the invoking user's
+  locale while the exception's `message` stays the English logged/fallback text.
+  The core's own failures (`core.ext.error.no_manager`, `core.sync.guild.invalid`)
+  use it, so their French translations reach the user; plain
+  `UserFacingError(message)` behaviour is unchanged.
+- `i18n.translate` treats a translator result that is `None` or still echoes its
+  input (the key or the `locale_str`) as untranslated and falls back to the
+  `en-US` text, and a `{placeholder}`/argument mismatch now returns the unformatted
+  text instead of raising — a bad catalog entry can no longer break a reply.
+
 ### Changed
 
 - The placeholder Protocols in `bot`, `errors` and `extensions` are replaced by the

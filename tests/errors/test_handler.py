@@ -381,6 +381,77 @@ async def test_user_facing_message_that_looks_like_a_key_is_not_translated() -> 
     assert interaction.response.sent[0].content == "errors.generic"
 
 
+async def test_user_facing_error_with_key_is_translated() -> None:
+    interaction = FrenchInteraction()
+    handler = ErrorHandler(Settings())
+
+    await handler.handle(
+        interaction,
+        UserFacingError(
+            "No extensions package is configured.",
+            message_key="core.ext.error.no_manager",
+        ),
+    )
+
+    assert interaction.response.sent[0].content == (
+        "Aucun paquet d'extensions n'est configuré."
+    )
+
+
+async def test_user_facing_error_with_key_formats_placeholders() -> None:
+    interaction = FrenchInteraction()
+    handler = ErrorHandler(Settings())
+
+    await handler.handle(
+        interaction,
+        UserFacingError(
+            "`x` is not a valid guild id.",
+            message_key="core.sync.guild.invalid",
+            format_args={"guild_id": "x"},
+        ),
+    )
+
+    assert interaction.response.sent[0].content == (
+        "`x` n'est pas un identifiant de guilde valide."
+    )
+
+
+async def test_user_facing_error_with_key_logs_english_message(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.DEBUG, logger="discord_bot_core.errors.handler")
+    interaction = FrenchInteraction()
+    handler = ErrorHandler(Settings())
+
+    await handler.handle(
+        interaction,
+        UserFacingError(
+            "No extensions package is configured.",
+            message_key="core.ext.error.no_manager",
+        ),
+    )
+
+    record = caplog.records[-1]
+    assert record.levelno == logging.INFO
+    assert "No extensions package is configured." in record.message
+
+
+async def test_user_facing_error_with_key_english_for_english_user() -> None:
+    interaction = FakeInteraction()
+    handler = ErrorHandler(Settings())
+
+    await handler.handle(
+        interaction,
+        UserFacingError(
+            "`x` is not a valid guild id.",
+            message_key="core.sync.guild.invalid",
+            format_args={"guild_id": "x"},
+        ),
+    )
+
+    assert interaction.response.sent[0].content == "`x` is not a valid guild id."
+
+
 async def test_generic_reply_is_translated_with_error_id() -> None:
     interaction = FrenchInteraction()
     handler = ErrorHandler(Settings())

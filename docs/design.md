@@ -480,7 +480,7 @@ that should be user-visible (the owner check is a command check, not a tree chec
 
    | Exception | User sees (ephemeral) | Log |
    |---|---|---|
-   | `UserFacingError` (or subclass) | its `.message` | INFO, no traceback |
+   | `UserFacingError` (or subclass) | its `.message`, or its `message_key` translated | INFO, no traceback |
    | `OwnerOnlyError`, `app_commands.CheckFailure` | "You can't use this command." | INFO |
    | `NoPrivateMessage` | "This command only works in a server." | INFO |
    | `MissingPermissions`, `BotMissingPermissions` | permissions named | INFO |
@@ -522,7 +522,9 @@ that should be user-visible (the owner check is a command check, not a tree chec
 ```python
 class CoreError(Exception): ...                          # base of everything the core raises
 class UserFacingError(CoreError):
-    def __init__(self, message: str) -> None: ...        # .message, str(self) == message
+    def __init__(self, message: str, *,
+                 message_key: str | None = None,      # catalog key translated in the reply
+                 format_args: dict | None = None) -> None: ...  # .message, str(self) == message
 class DatabaseNotConfiguredError(CoreError): ...          # programmer/config error, generic message + id
 class NoActiveSessionError(CoreError): ...                # get_session() without @transactional
 class ExternalServiceError(CoreError): ...                # clients layer
@@ -563,9 +565,13 @@ translated.
   locale through `interaction.translate(locale_str(key))`. The helper
   `i18n.translate(interaction, key, **format_args)` wraps it and falls back to the
   `en-US` catalog text when the interaction has no translator (fakes in tests) or the
-  translator returns `None`; placeholders are filled with `str.format`.
-  `i18n.default_text(key)` returns the English text, used for messages carried by an
-  exception (application-supplied `UserFacingError` text is passed through unchanged).
+  translator returns `None` or echoes its input (the key, or the `locale_str`); a
+  `{placeholder}`/argument mismatch returns the unformatted text instead of raising.
+  `i18n.default_text(key)` returns the English text. A `UserFacingError` may carry a
+  `message_key` (plus `format_args`): the handler replies with that key translated
+  per the user's locale, and the exception's `message` stays the English
+  logged/fallback text. Application-supplied `UserFacingError` text without a key is
+  passed through unchanged.
 - **Error handler.** The ephemeral reply to the user is translated; the error-log
   channel embed stays in English on purpose (it is for the team, and mixing locales
   there is noise). The generic message is the `errors.generic` key with an

@@ -37,7 +37,8 @@ class Outcome:
     Attributes:
         message: The text shown to the user: either a symbolic catalog key (the
             core's own messages, translated per the user's locale) or, for a
-            :class:`UserFacingError`, the application's own text (passed through).
+            :class:`UserFacingError` without a ``message_key``, the application's own
+            text (passed through).
         level: The log level for the error.
         expected: ``True`` for errors the handler understands (no traceback, no
             report); ``False`` for the unexpected path.
@@ -146,11 +147,12 @@ class ErrorHandler:
         interaction: discord.Interaction,
         outcome: Outcome,
     ) -> str:
-        """Translate the outcome's message when it is a core key, else pass it through.
+        r"""Translate the outcome's message when it is a core key, else pass it through.
 
-        ``UserFacingError`` carries application text already (``translatable`` is
-        ``False``); only the core's own messages are translated, per the invoking
-        user's locale.
+        A ``UserFacingError`` without a ``message_key`` carries application text
+        already (``translatable`` is ``False``) and is passed through; the core's own
+        messages and ``UserFacingError``\\ s with a ``message_key`` are translated per
+        the invoking user's locale.
         """
         if not outcome.translatable:
             return outcome.message
@@ -161,7 +163,7 @@ class ErrorHandler:
 
         The ``message`` of the returned outcome is a catalog key for the core's own
         messages (translated per the user's locale when replying) or, for a
-        :class:`UserFacingError`, the application's own text.
+        :class:`UserFacingError` without a ``message_key``, the application's own text.
 
         Args:
             error: The original exception (not a ``CommandInvokeError``).
@@ -171,8 +173,15 @@ class ErrorHandler:
             The outcome for this error.
         """
         if isinstance(error, UserFacingError):
+            if error.message_key is None:
+                return Outcome(
+                    error.message, logging.INFO, expected=True, translatable=False
+                )
             return Outcome(
-                error.message, logging.INFO, expected=True, translatable=False
+                error.message_key,
+                logging.INFO,
+                expected=True,
+                format_args=dict(error.format_args),
             )
         if isinstance(error, OwnerOnlyError):
             return Outcome("errors.check_failure", logging.INFO, expected=True)

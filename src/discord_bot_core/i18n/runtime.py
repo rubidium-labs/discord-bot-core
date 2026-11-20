@@ -37,12 +37,24 @@ def default_text(key: str) -> str:
     return text
 
 
+def _format(text: str, format_args: dict[str, Any]) -> str:
+    """Fill ``text``'s placeholders, returning it unchanged if the args do not match."""
+    try:
+        return text.format(**format_args)
+    except KeyError, IndexError, ValueError:
+        return text
+
+
 async def translate(interaction: Any, key: str, /, **format_args: Any) -> str:
     """Translate ``key`` for the invoking user's locale, formatting its placeholders.
 
     Uses ``interaction.translate`` when the interaction has it; a fake without one
-    gets the ``en-US`` default. A ``None`` from the translator also falls back to the
-    default. The result is passed through ``str.format(**format_args)``.
+    gets the ``en-US`` default. The translator's result counts as untranslated — and
+    falls back to ``default_text(key)`` — when it is ``None`` or still equal to the
+    key, the ``locale_str`` or its message (a translator that echoes its input). The
+    result is passed through ``str.format(**format_args)``; a mismatch between the
+    text's placeholders and ``format_args`` returns the unformatted text instead of
+    raising.
 
     Args:
         interaction: The invoking interaction.
@@ -52,10 +64,17 @@ async def translate(interaction: Any, key: str, /, **format_args: Any) -> str:
     Returns:
         The translated, formatted text.
     """
+    locale_string = app_commands.locale_str(key)
+    default = default_text(key)
     translate_method = getattr(interaction, "translate", None)
     text: str | None = None
     if translate_method is not None:
-        text = await translate_method(app_commands.locale_str(key))
-    if text is None:
-        text = default_text(key)
-    return text.format(**format_args)
+        text = await translate_method(locale_string)
+    if (
+        text is None
+        or text == key
+        or text == locale_string
+        or text == locale_string.message
+    ):
+        text = default
+    return _format(text, format_args)

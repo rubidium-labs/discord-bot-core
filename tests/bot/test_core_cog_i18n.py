@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 import discord
@@ -9,7 +10,7 @@ import pytest
 
 from discord_bot_core.bot import CoreBot
 from discord_bot_core.commands.admin import CoreCog
-from discord_bot_core.errors import UserFacingError
+from discord_bot_core.errors import ErrorHandler, UserFacingError
 from discord_bot_core.i18n import CORE_CATALOG
 from discord_bot_core.settings import CoreSettings
 from discord_bot_core.testing import FakeClient, FakeInteraction
@@ -139,6 +140,39 @@ async def test_sync_guild_bad_input_uses_english_default() -> None:
     with pytest.raises(UserFacingError) as caught:
         await cog.sync_guild.callback(cog, interaction, guild_id="x")  # type: ignore[attr-defined]
     assert caught.value.message == "`x` is not a valid guild id."
+    assert caught.value.message_key == "core.sync.guild.invalid"
+    assert caught.value.format_args == {"guild_id": "x"}
+
+
+async def test_invalid_guild_id_error_reply_is_french() -> None:
+    cog = CoreCog(CoreBot(_settings()))
+    handler = ErrorHandler(_Settings())
+    interaction = FrenchInteraction(client=OwnerClient())
+    try:
+        await cog.sync_guild.callback(cog, interaction, guild_id="x")  # type: ignore[attr-defined]
+    except UserFacingError as error:
+        await handler.handle(interaction, error)
+    assert interaction.response.sent[0].content == (
+        "`x` n'est pas un identifiant de guilde valide."
+    )
+
+
+async def test_no_manager_error_reply_is_french() -> None:
+    cog = CoreCog(CoreBot(_settings()))
+    handler = ErrorHandler(_Settings())
+    interaction = FrenchInteraction(client=OwnerClient())
+    try:
+        await cog.ext_list.callback(cog, interaction)  # type: ignore[attr-defined]
+    except UserFacingError as error:
+        await handler.handle(interaction, error)
+    assert interaction.response.sent[0].content == (
+        "Aucun paquet d'extensions n'est configuré."
+    )
+
+
+@dataclass
+class _Settings:
+    error_log_channel_id: int | None = None
 
 
 class _Manager:

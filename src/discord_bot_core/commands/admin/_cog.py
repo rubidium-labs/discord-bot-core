@@ -37,8 +37,8 @@ MAX_CHOICES = 25
 _COLOUR_INFO = discord.Colour.blurple()
 _COLOUR_SUCCESS = discord.Colour.green()
 _COLOUR_WARNING = discord.Colour.orange()
-_NO_MANAGER_ERROR = default_text("core.ext.error.no_manager")
-_INVALID_GUILD_ID = default_text("core.sync.guild.invalid")
+_NO_MANAGER_KEY = "core.ext.error.no_manager"
+_INVALID_GUILD_ID_KEY = "core.sync.guild.invalid"
 
 
 class _OwnerOnlyGroup(app_commands.Group):
@@ -103,7 +103,9 @@ class CoreCog(commands.Cog):
     def _manager(self) -> Any:
         manager = self.bot.extension_manager
         if manager is None:
-            raise UserFacingError(_NO_MANAGER_ERROR)
+            raise UserFacingError(
+                default_text(_NO_MANAGER_KEY), message_key=_NO_MANAGER_KEY
+            )
         return manager
 
     async def _is_owner(self, interaction: discord.Interaction) -> bool:
@@ -268,12 +270,14 @@ class CoreCog(commands.Cog):
         """
         try:
             parsed = int(guild_id)
-        except ValueError as error:
-            raise UserFacingError(
-                _INVALID_GUILD_ID.format(guild_id=guild_id)
-            ) from error
+        except ValueError:
+            parsed = 0
         if parsed <= 0:
-            raise UserFacingError(_INVALID_GUILD_ID.format(guild_id=guild_id))
+            raise UserFacingError(
+                default_text(_INVALID_GUILD_ID_KEY).format(guild_id=guild_id),
+                message_key=_INVALID_GUILD_ID_KEY,
+                format_args={"guild_id": guild_id},
+            )
         commands = await self.bot.sync_guild(parsed)
         logger.info(
             "Synced commands scope=guild count=%d user=%s",

@@ -11,7 +11,7 @@ Raise the most specific exception available.
 
 | Exception | User sees | Log level |
 |---|---|---|
-| `UserFacingError` | its message, verbatim | INFO |
+| `UserFacingError` | its message, verbatim — or its `message_key` translated to the user's locale | INFO |
 | `OwnerOnlyError` (a `CheckFailure`) | the check-failure message | INFO |
 | `app_commands.NoPrivateMessage` | the no-DM message | INFO |
 | `MissingPermissions` / `BotMissingPermissions` | the missing permissions, named | INFO |
