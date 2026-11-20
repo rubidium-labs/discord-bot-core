@@ -2,9 +2,10 @@
 
 from enum import StrEnum
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import PositiveInt, SecretStr
+import discord
+from pydantic import PositiveInt, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_SECRETS_DIR = Path("/run/secrets")
@@ -44,6 +45,22 @@ class CoreSettings(BaseSettings):
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     error_log_channel_id: PositiveInt | None = None
     database_url: SecretStr | None = None
+    default_locale: str = "en-US"
+    """The locale used when a message has no translation for the user's locale.
+
+    Stored as a ``str`` (a ``discord.Locale`` value such as ``"en-US"`` or
+    ``"fr"``); construct ``discord.Locale(settings.default_locale)`` where the
+    :class:`~discord.Locale` enum is needed.
+    """
+
+    @field_validator("default_locale")
+    @classmethod
+    def _validate_locale(cls, value: Any) -> str:
+        """Reject a value that is not a :class:`discord.Locale` code."""
+        try:
+            return discord.Locale(value).value
+        except ValueError as error:
+            raise ValueError(f"not a supported locale: {value!r}") from error
 
     @classmethod
     def load(cls, secrets_dir: Path | str = DEFAULT_SECRETS_DIR) -> CoreSettings:

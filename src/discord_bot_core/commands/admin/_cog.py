@@ -33,6 +33,8 @@ _COLOUR_INFO = discord.Colour.blurple()
 _COLOUR_SUCCESS = discord.Colour.green()
 _COLOUR_WARNING = discord.Colour.orange()
 _DIRTY_HINT = "Command definitions changed; run `/core sync dev`."
+_SYNC_DONE_KEY = "core.sync.done"
+_SYNC_DONE_DEFAULT = "Commands synced"
 
 
 class _OwnerOnlyGroup(app_commands.Group):
@@ -144,9 +146,28 @@ class CoreCog(commands.Cog):
             logger.warning("Extension autocomplete failed", exc_info=True)
             return []
 
-    def _sync_embed(self, scope: str, commands: list[Any]) -> discord.Embed:
+    async def _sync_title(self, interaction: discord.Interaction) -> str:
+        """Return the localized sync-success title for the invoking user.
+
+        Uses ``interaction.translate`` (which applies the user's locale); when the
+        interaction has no translator (a plain fake in tests), the English default
+        is used.
+
+        Args:
+            interaction: The invoking interaction.
+
+        Returns:
+            The translated title, or the English default.
+        """
+        translate = getattr(interaction, "translate", None)
+        if translate is None:
+            return _SYNC_DONE_DEFAULT
+        text: str | None = await translate(app_commands.locale_str(_SYNC_DONE_KEY))
+        return text if text is not None else _SYNC_DONE_DEFAULT
+
+    def _sync_embed(self, title: str, scope: str, commands: list[Any]) -> discord.Embed:
         names = [command.name for command in commands]
-        embed = discord.Embed(title="Commands synced", colour=_COLOUR_SUCCESS)
+        embed = discord.Embed(title=title, colour=_COLOUR_SUCCESS)
         embed.add_field(name="Scope", value=scope, inline=True)
         embed.add_field(name="Count", value=str(len(names)), inline=True)
         embed.add_field(name="Commands", value=_names(names), inline=False)
@@ -178,7 +199,9 @@ class CoreCog(commands.Cog):
             interaction: The invoking interaction.
         """
         commands = await self.bot.sync_global()
-        embed = self._sync_embed("global", commands)
+        embed = self._sync_embed(
+            await self._sync_title(interaction), "global", commands
+        )
         if self.bot.settings.environment is Environment.DEV:
             embed.colour = _COLOUR_WARNING
             embed.add_field(
@@ -213,7 +236,10 @@ class CoreCog(commands.Cog):
             interaction.user.id,
         )
         await interaction.response.send_message(
-            embed=self._sync_embed(scope, commands), ephemeral=True
+            embed=self._sync_embed(
+                await self._sync_title(interaction), scope, commands
+            ),
+            ephemeral=True,
         )
 
     @sync.command(name="guild", description="Sync the commands of one guild.")
@@ -241,7 +267,10 @@ class CoreCog(commands.Cog):
             interaction.user.id,
         )
         await interaction.response.send_message(
-            embed=self._sync_embed(f"guild {parsed}", commands), ephemeral=True
+            embed=self._sync_embed(
+                await self._sync_title(interaction), f"guild {parsed}", commands
+            ),
+            ephemeral=True,
         )
 
     @ext.command(name="load", description="Load an extension.")
